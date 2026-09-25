@@ -106,7 +106,7 @@ func begin(allies: Array, enemies: Array, p_relics: Array) -> void:
 		hud.log_line(I18n.s("log_leader", [leader.display_name, Data.stat_text(leader.species.leader.stat, leader.species.leader.value)]))
 	hud.log_line(I18n.s("log_tip"))
 	cam.set_view(Vector3(0, 26, 30), Vector3(0, 0, 0), 1.0, true)
-	cam.overview(1.3)
+	cam.battle_view(Vector3.ZERO, 0.0, 1.3)
 	for i in units.size():
 		units[i].anim_spawn(0.15 + i * 0.09)
 	await _wait(1.3)
@@ -288,7 +288,7 @@ func _run_turn(u: Node) -> void:
 
 	var choice: Dictionary
 	if u.team == 1 or auto_battle:
-		cam.over_shoulder(u.global_position, _team_center(1 - u.team))
+		cam.battle_view(u.global_position, 0.1)
 		await _wait(0.4)
 		if not _ok():
 			return
@@ -321,7 +321,7 @@ func _finish_turn(u: Node) -> void:
 	current_unit = null
 	if _check_end():
 		return
-	cam.overview(2.2)
+	cam.battle_view()
 	state = State.TICKING
 
 
@@ -341,7 +341,7 @@ func _check_end() -> bool:
 func _player_choose(u: Node) -> Dictionary:
 	state = State.WAIT_INPUT
 	selected_skill = 2 if u.ultimate_ready() else 0
-	cam.over_shoulder(u.global_position, _team_center(1 - u.team))
+	cam.battle_view(u.global_position, 0.12)
 	_refresh_targeting()
 	hud.set_hint(I18n.s("battle_hint"))
 	var choice: Dictionary = await player_action
@@ -559,7 +559,7 @@ func _execute(c: Node, idx: int, target: Node) -> void:
 
 	match sk.anim:
 		"melee":
-			cam.focus_on(focus, c.global_position - focus, 6.5, 2.4, 4.0)
+			cam.battle_view(focus, 0.25)
 			audio.play(audio.element_sfx(c.element), -4.0)
 			await c.anim_lunge(focus)
 		"projectile":
@@ -573,16 +573,13 @@ func _execute(c: Node, idx: int, target: Node) -> void:
 		"ultimate":
 			audio.play("ultimate")
 			hud.banner(sk_name, ecol, "奥 义" if not I18n.en() else "ULTIMATE")
-			cam.focus_on(c.global_position, focus - c.global_position, 5.5, 1.8, 5.0)
+			cam.battle_view(c.global_position, 0.5, 2.5)
 			vfx.pillar(c.global_position, ecol)
 			vfx.ring(c.global_position, ecol, 4.0, 0.8)
 			await c.anim_ultimate()
 			if not _ok():
 				return
-			if sk.target == "enemy":
-				cam.focus_on(focus, c.global_position - focus, 7.0, 2.8, 5.0)
-			else:
-				cam.set_view(Vector3(0, 11, _team_center(c.team).z * 2.6), focus, 4.0)
+			cam.battle_view(focus, 0.3, 2.5)
 	if not _ok():
 		return
 
@@ -910,11 +907,11 @@ func _end_battle(victory: bool) -> void:
 		audio.play("victory")
 		for u in _alive_team(0):
 			u.anim_cheer()
-		cam.orbit_point(_team_center(0), 9.0, 4.0)
+		cam.battle_view(_team_center(0), 0.4, 1.0)
 		hud.banner(I18n.s("victory"), HUD.BRASS)
 	else:
 		audio.play("defeat")
-		cam.orbit_point(_team_center(1), 9.0, 4.0)
+		cam.battle_view(_team_center(1), 0.4, 1.0)
 		hud.banner(I18n.s("defeat"), HUD.ENEMY_COL)
 	var report := {"allies": [], "turns": stats.turns, "reactions": stats.reactions, "crits": stats.crits}
 	for u in units:

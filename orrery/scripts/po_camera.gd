@@ -47,13 +47,26 @@ func _process(delta: float) -> void:
 	v_offset = (randf() * 2.0 - 1.0) * 0.35 * t2
 
 
-func overview(p_speed: float = 2.5) -> void:
-	mode = Mode.OVERVIEW
+func overview(p_speed: float = 2.0) -> void:
+	battle_view(Vector3.ZERO, 0.0, p_speed)
+
+
+## Calm battle camera: it always stays behind the player's side and only leans
+## a little toward the action (`focus`) and pushes in by `zoom` (0..1). It never
+## swings around to the enemy's side, so turns don't spin the view.
+func battle_view(focus: Vector3 = Vector3.ZERO, zoom: float = 0.0, p_speed: float = 2.0) -> void:
+	mode = Mode.MANUAL
+	var base_pos := Vector3(0.0, 10.0, 17.0)
+	var base_look := Vector3(0.0, 0.6, -1.0)
+	var look := base_look.lerp(Vector3(focus.x, 0.8, focus.z), 0.2 + zoom * 0.35)
+	var pos := base_pos + Vector3(focus.x * 0.25, 0.0, 0.0)
+	target_pos = pos.lerp(look, zoom * 0.35)
+	look_target = look
 	speed = p_speed
 
 
 func shake(amount: float) -> void:
-	trauma = minf(trauma + amount, 1.0)
+	trauma = minf(trauma + amount * 0.6, 0.7)
 
 
 func set_view(pos: Vector3, look: Vector3, p_speed: float = 3.0, snap: bool = false) -> void:
