@@ -67,6 +67,7 @@ func _ready() -> void:
 	cam.make_current()
 	vfx = VFX.new()
 	add_child(vfx)
+	Anims.audio = audio
 	units_root = Node3D.new()
 	units_root.name = "Units"
 	add_child(units_root)

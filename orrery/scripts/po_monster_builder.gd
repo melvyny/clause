@@ -544,8 +544,10 @@ static func _boss(k: Kit) -> void:
 	heart.position = Vector3(0, 1.5, -1.2)
 	body.add_child(heart)
 	# orbiting shards it refuses to put back
+	var orbits: Array = []
 	for ring_i in 2:
 		var orbit := k.node(body, Vector3(0, 1.2 + ring_i * 1.1, 0), Vector3(15 - ring_i * 30, 0, 10))
+		orbits.append(orbit)
 		for i in 7:
 			var a := TAU * i / 7.0
 			var shard := M.add_mesh(orbit, M.prism(Vector3(0.35, 0.5, 0.06)), k.p(0.0, 1.0, 4.0, Color(0.1, 0.08, 0.1)),
@@ -556,6 +558,7 @@ static func _boss(k: Kit) -> void:
 		m.set_shader_parameter("gold", Color(0.75, 0.08, 0.05))
 		m.set_shader_parameter("damage", 0.35)
 	k.muzzle(body, Vector3(0, 3.0, -0.3))
+	k.root.set_meta("parts", {"body": body, "orbits": orbits})
 	k.root.set_meta("height", 3.3)
 	k.root.set_meta("radius", 1.2)
 

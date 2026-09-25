@@ -7,6 +7,7 @@ const Data = preload("po_data.gd")
 const M = preload("po_mat.gd")
 const Builder = preload("po_monster_builder.gd")
 const I18n = preload("po_i18n.gd")
+const Anims = preload("po_anims.gd")
 
 var species_id := ""
 var species: Dictionary = {}
@@ -383,6 +384,8 @@ func anim_ultimate() -> void:
 
 func anim_hit(crit: bool) -> void:
 	play_anim("hit")
+	if alive:
+		Anims.hit(self, crit)
 	for mi in _meshes:
 		if is_instance_valid(mi):
 			mi.material_overlay = _flash_mat
