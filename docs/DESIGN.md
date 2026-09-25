@@ -140,7 +140,53 @@ Party model for floor *r*:
 
 The model is kinder than a real run (no HP carry-over), so aim slightly high.
 
-SIM_RESULTS
+| 起始 Starter | 战斗 Fight | 层 Floor | 胜率 Win | 我方行动 Ally acts | 总回合 Turns | 估计秒数 Est. sec | 崩裂 Breaks | 相生 Chains | 打断 Interrupts | 剩余生命 HP left |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 木火相生 Wood Feeds Fire | battle | 1 | 100% | 9.2 | 13.8 | 38 | 0.5 | 4.3 | 0.0 | 0.77 |
+| 木火相生 Wood Feeds Fire | battle | 2 | 100% | 11.5 | 17.2 | 48 | 1.1 | 5.4 | 0.2 | 0.80 |
+| 木火相生 Wood Feeds Fire | battle | 3 | 100% | 10.5 | 15.5 | 44 | 0.7 | 4.5 | 0.2 | 0.80 |
+| 木火相生 Wood Feeds Fire | elite | 3 | 80% | 14.0 | 24.5 | 70 | 2.0 | 5.4 | 0.5 | 0.51 |
+| 木火相生 Wood Feeds Fire | battle | 4 | 100% | 14.3 | 18.7 | 52 | 1.2 | 4.9 | 0.6 | 0.88 |
+| 木火相生 Wood Feeds Fire | battle | 5 | 100% | 19.2 | 30.2 | 85 | 3.1 | 4.3 | 0.5 | 0.61 |
+| 木火相生 Wood Feeds Fire | elite | 5 | 90% | 24.3 | 38.3 | 107 | 3.9 | 6.5 | 1.1 | 0.57 |
+| 木火相生 Wood Feeds Fire | battle | 6 | 70% | 18.5 | 33.5 | 92 | 3.8 | 8.0 | 1.3 | 0.53 |
+| 木火相生 Wood Feeds Fire | elite | 6 | 50% | 18.6 | 36.9 | 102 | 4.9 | 9.3 | 1.1 | 0.37 |
+| 木火相生 Wood Feeds Fire | battle | 7 | 60% | 14.9 | 28.5 | 79 | 3.6 | 5.4 | 0.6 | 0.45 |
+| 木火相生 Wood Feeds Fire | boss | 8 | 30% | 17.9 | 31.1 | 91 | 4.5 | 5.3 | 0.7 | 0.19 |
+| 守夜人 Night Watch | battle | 1 | 100% | 15.2 | 25.6 | 68 | 2.9 | 3.7 | 0.8 | 0.81 |
+| 守夜人 Night Watch | battle | 2 | 100% | 16.6 | 28.4 | 75 | 3.8 | 4.6 | 1.6 | 0.88 |
+| 守夜人 Night Watch | battle | 3 | 90% | 18.8 | 32.0 | 86 | 4.1 | 3.2 | 1.5 | 0.76 |
+| 守夜人 Night Watch | elite | 3 | 90% | 22.0 | 37.9 | 99 | 4.6 | 4.6 | 1.2 | 0.73 |
+| 守夜人 Night Watch | battle | 4 | 100% | 17.9 | 26.1 | 69 | 3.2 | 5.8 | 1.2 | 0.90 |
+| 守夜人 Night Watch | battle | 5 | 90% | 31.0 | 56.1 | 150 | 6.2 | 16.2 | 2.8 | 0.79 |
+| 守夜人 Night Watch | elite | 5 | 90% | 23.6 | 39.6 | 108 | 5.2 | 8.2 | 2.1 | 0.71 |
+| 守夜人 Night Watch | battle | 6 | 90% | 25.8 | 48.5 | 127 | 7.2 | 6.7 | 2.7 | 0.67 |
+| 守夜人 Night Watch | elite | 6 | 90% | 35.6 | 64.7 | 170 | 8.5 | 9.5 | 2.4 | 0.64 |
+| 守夜人 Night Watch | battle | 7 | 90% | 15.9 | 28.6 | 78 | 4.2 | 6.5 | 1.4 | 0.71 |
+| 守夜人 Night Watch | boss | 8 | 90% | 33.6 | 49.3 | 137 | 5.9 | 8.0 | 2.3 | 0.79 |
+| 土生金 Earth Makes Metal | battle | 1 | 100% | 5.3 | 6.1 | 17 | 0.0 | 2.1 | 0.0 | 0.95 |
+| 土生金 Earth Makes Metal | battle | 2 | 100% | 10.4 | 14.1 | 37 | 0.7 | 4.8 | 0.2 | 0.85 |
+| 土生金 Earth Makes Metal | battle | 3 | 100% | 11.2 | 15.6 | 41 | 0.8 | 5.5 | 0.5 | 0.85 |
+| 土生金 Earth Makes Metal | elite | 3 | 80% | 15.3 | 23.2 | 63 | 1.4 | 7.2 | 0.3 | 0.64 |
+| 土生金 Earth Makes Metal | battle | 4 | 100% | 13.4 | 16.8 | 45 | 1.3 | 5.5 | 0.6 | 0.90 |
+| 土生金 Earth Makes Metal | battle | 5 | 100% | 17.8 | 24.4 | 65 | 2.4 | 7.1 | 1.3 | 0.90 |
+| 土生金 Earth Makes Metal | elite | 5 | 90% | 19.9 | 30.2 | 81 | 3.0 | 7.1 | 0.7 | 0.76 |
+| 土生金 Earth Makes Metal | battle | 6 | 100% | 15.6 | 21.1 | 57 | 2.3 | 5.9 | 1.0 | 0.85 |
+| 土生金 Earth Makes Metal | elite | 6 | 90% | 18.0 | 26.2 | 71 | 2.7 | 6.9 | 0.8 | 0.77 |
+| 土生金 Earth Makes Metal | battle | 7 | 100% | 16.5 | 22.8 | 62 | 2.8 | 7.4 | 0.6 | 0.81 |
+| 土生金 Earth Makes Metal | boss | 8 | 100% | 29.1 | 36.4 | 99 | 3.5 | 13.7 | 1.2 | 0.84 |
+
+**Findings**
+
+- **Pacing is on target.** Normal fights take 10–19 ally actions (40–90 s). Elites take 14–25 (60–110 s). The boss takes 18–34 (90–140 s).
+- **Each system comes up several times per fight.** Every fight averages 2–8 breaks, 4–9 chain links and 0.5–3 interrupts, so each new system matters in every fight.
+- **The starters are not balanced yet.**
+  - 土生金 Earth Makes Metal: its fastest-to-slowest speed order *is* its generating order (土→金→水). It chains on almost every action and beats the boss 100% of the time.
+  - 木火相生 Wood Feeds Fire: fragile (Phoenix toughness 80). It fades late, with 30% vs the boss.
+  - Next tuning step: slow the Sancai Steed or give the Phoenix toughness, then aim for a 60–80% boss win rate for every starter.
+- **The sim is kinder than a real run** (full HP each fight). With HP carried over, the random-path autotest won about 1 run in 4.
+- **Bug found by the trace:** a break used to empty the Attack Bar. Enemies breaking fragile spirits denied them almost every turn (2 ally turns out of 12). A break now knocks the bar back by 35%.
+
 
 ## 10. 内容成本 · Content cost (to plan the roster)
 
