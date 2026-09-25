@@ -72,7 +72,7 @@ func over_shoulder(caster_pos: Vector3, focus: Vector3) -> void:
 	dir.y = 0
 	dir = dir.normalized()
 	var right := dir.cross(Vector3.UP).normalized()
-	set_view(caster_pos + dir * 4.2 + Vector3.UP * 3.0 + right * 1.6, focus.lerp(caster_pos, 0.25) + Vector3.UP * 0.8, 3.2)
+	set_view(caster_pos + dir * 7.5 + Vector3.UP * 5.0 - right * caster_pos.x * 0.35, focus.lerp(caster_pos, 0.3) + Vector3.UP * 0.6, 3.2)
 
 
 ## Dramatic close-up on a point (ultimate caster or crit target).

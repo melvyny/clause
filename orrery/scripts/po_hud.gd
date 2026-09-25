@@ -27,7 +27,7 @@ var battle: Node
 var root: Control
 var _plates := {}       # unit -> {root, hp, atb, en, status}
 var _portraits := {}    # unit -> {button, hp, en}
-var _ally_row: HBoxContainer
+var _ally_row: VBoxContainer
 var _enemy_row: HBoxContainer
 var _order_row: HBoxContainer
 var _skill_row: HBoxContainer
@@ -229,7 +229,7 @@ func _build_top() -> void:
 
 
 func _build_bottom() -> void:
-	_ally_row = HBoxContainer.new()
+	_ally_row = VBoxContainer.new()
 	_ally_row.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_ally_row.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_ally_row.offset_left = 16
