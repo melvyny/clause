@@ -155,25 +155,27 @@ func ally_specs() -> Array:
 	return out
 
 
-## Enemies scale by level, toughness (+5% per row) and, deeper in, their own upgrades.
+## Enemies scale by level, toughness (+5% per row) and, deeper in, their own upgrades
+## (one from floor 4, two from floor 7).
 func enemy_specs(row: int, kind: String) -> Array:
 	var out: Array = []
 	var pool: Array = Data.SPECIES_ORDER.duplicate()
 	_shuffle(pool)
 	if kind == "boss":
-		var team := [pool[0], pool[1]]
+		var team := [pool[0], pool[1], pool[2]]
 		var traits := Data.active_traits(team)
-		out.append(_enemy(pool[0], 8, 1.0, 8, traits))
-		var st := Data.compute_stats("boss", 10, 0, 3.0)
-		out.append({"species": "boss", "level": 10, "stats": st, "boss": true})
-		out.append(_enemy(pool[1], 8, 1.0, 8, traits))
+		out.append(_enemy(pool[0], 9, 1.0, 8, traits))
+		var st := Data.compute_stats("boss", 11, 0, 4.5)
+		out.append({"species": "boss", "level": 11, "stats": st, "boss": true})
+		out.append(_enemy(pool[1], 9, 1.0, 8, traits))
+		out.append(_enemy(pool[2], 9, 1.0, 8, traits))
 		return out
 	var elite := kind == "elite"
-	var count := 3 if (row <= 4 or elite) else 4
+	var count := 3 if row <= (3 if elite else 4) else 4
 	var lvl := Data.enemy_level(row, elite)
 	var traits := Data.active_traits(pool.slice(0, count))
 	for i in count:
-		var hp_mult := 1.7 if (elite and i == 1) else (0.8 if row <= 1 else 1.0)
+		var hp_mult: float = 1.7 if (elite and i == 1) else ([0.7, 0.7, 0.85][row] if row <= 2 else 1.0)
 		var e := _enemy(pool[i], lvl, hp_mult, row, traits)
 		if elite and i == 1:
 			e.boss = true
@@ -186,9 +188,12 @@ func _enemy(sid: String, lvl: int, hp_mult: float, row: int, traits: Dictionary)
 	var ups: Array = []
 	var all_ups: Array = Data.SPECIES[sid].upgrades.map(func(u): return u.id)
 	_shuffle(all_ups)
-	ups = all_ups.slice(0, clampi(row / 3, 0, all_ups.size()))
+	ups = all_ups.slice(0, clampi((row - 1) / 3, 0, all_ups.size()))
 	var st := Data.compute_stats(sid, lvl, 0, hp_mult, {}, ups, traits)
 	st.toughness = roundf(st.toughness * (1.0 + 0.05 * row))
+	# the first floors teach the rules: enemies hit a little softer there
+	if row <= 3:
+		st.atk = roundf(st.atk * [0.85, 0.85, 0.85, 0.93][row])
 	return {"species": sid, "level": lvl, "stats": st, "upgrades": ups}
 
 
@@ -207,7 +212,7 @@ func apply_battle(victory: bool, report: Dictionary, kind: String, row: int) -> 
 			m.hp = maxf(0.05, float(a.hp_ratio))
 			if victory:
 				m.level = int(m.level) + 1
-				m.hp = minf(1.0, float(m.hp) + 0.2)
+				m.hp = minf(1.0, float(m.hp) + 0.3)
 		elif int(m.mends) >= Data.MAX_MENDS:
 			res.dust.append(display_name(m))
 			dust.append(display_name(m))

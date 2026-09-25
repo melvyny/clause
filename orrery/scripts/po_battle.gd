@@ -6,7 +6,7 @@ extends Node3D
 ## On top of that, three porcelain-grounded systems (see docs/DESIGN.md):
 ##   五行 Five Phases  : 相克 overcoming = more damage and much more crack
 ##   裂纹/崩裂 Crack    : hits build crack up to a figure's toughness (胎厚); at
-##                       full crack it BREAKS: loses its Attack Bar, its telegraphed
+##                       full crack it BREAKS: loses 35% Attack Bar, its telegraphed
 ##                       move is interrupted, takes +30% damage until its next
 ##                       turn, and suffers a 窑变 effect set by the breaker's element
 ##   相生 Chains        : an ally whose element feeds yours (木生火 ...) acting right
@@ -54,6 +54,7 @@ var floor_text := ""
 var banner_text := ""
 var banner_sub := ""
 var fast := false
+var trace := false                  # print every turn (debugging balance)
 var sim_time := 0.0                 # estimated seconds of battle at 1x speed
 var traits := [{}, {}]              # active traits per team
 var last_element := [-1, -1]        # element of each side's previous action (相生)
@@ -317,6 +318,9 @@ func _update_order() -> void:
 func _run_turn(u: Node) -> void:
 	state = State.BUSY
 	current_unit = u
+	if trace:
+		print("TRACE t%d %s%s atb=%.0f spd=%.0f | %s" % [stats.turns, "A " if u.team == 0 else "E ", u.species_id, u.atb, u.eff_spd(),
+			" ".join(units.filter(func(x): return x.alive).map(func(x): return "%s%s:%.0f/%s" % ["a" if x.team == 0 else "e", x.species_id.substr(0, 4), x.atb, str(x.statuses.map(func(st): return st.id))]))])
 	u.atb = 0.0
 	stats.turns += 1
 	if u.team == 0:
@@ -342,7 +346,7 @@ func _run_turn(u: Node) -> void:
 		var low: Array = _allies(u)
 		low.sort_custom(func(a, b): return a.hp_ratio() < b.hp_ratio())
 		if low.size() > 0 and low[0].hp_ratio() < 1.0:
-			_heal(low[0], low[0].max_hp * 0.08)
+			_heal(low[0], low[0].max_hp * 0.06)
 	elif u.passive_id == "clear_glaze":
 		for s in u.statuses:
 			if not Data.STATUS[s.id].buff:
@@ -860,7 +864,7 @@ func _execute(c: Node, idx: int, target: Node) -> void:
 func _chain_damage(c: Node) -> float:
 	if c.chain <= 0:
 		return 1.0
-	var step := Data.CHAIN_DAMAGE_STEP * (1.5 if _trait(c.team, "mono") >= 0 else 1.0)
+	var step := Data.CHAIN_DAMAGE_STEP * (Data.MONO_CHAIN if _trait(c.team, "mono") >= 0 else 1.0)
 	if c.team == 0 and _has("five_phases"):
 		step += 0.1
 	return 1.0 + step * c.chain
@@ -874,7 +878,7 @@ func _crack_amount(c: Node, t: Node, sk: Dictionary, aff: int) -> float:
 	elif aff == -1:
 		cr *= Data.DISADV_CRACK
 	if c.chain > 0:
-		cr *= 1.0 + Data.CHAIN_CRACK_STEP * c.chain * (1.5 if _trait(c.team, "mono") >= 0 else 1.0)
+		cr *= 1.0 + Data.CHAIN_CRACK_STEP * c.chain * (Data.MONO_CHAIN if _trait(c.team, "mono") >= 0 else 1.0)
 	var painted := _trait(c.team, "painted")
 	if painted >= 0:
 		cr *= 1.2 + 0.2 * painted
@@ -882,7 +886,7 @@ func _crack_amount(c: Node, t: Node, sk: Dictionary, aff: int) -> float:
 
 
 func _base_damage(c: Node, t: Node, sk: Dictionary, aff: int) -> float:
-	var d: float = c.eff_atk() * float(sk.mult) * 1000.0 / (1140.0 + 3.5 * t.eff_def())
+	var d: float = c.eff_atk() * float(sk.mult) * 1100.0 / (1140.0 + 3.5 * t.eff_def())
 	if aff == 1:
 		d *= Data.ADV_DAMAGE
 	elif aff == -1:
@@ -952,7 +956,7 @@ func _apply_hit(c: Node, t: Node, r: Dictionary, _sk: Dictionary) -> void:
 func _break(c: Node, t: Node) -> void:
 	t.broken = true
 	t.crack = t.toughness
-	t.atb = 0.0
+	t.atb = maxf(0.0, t.atb - Data.BREAK_ATB)
 	stats.breaks += 1
 	var be: Dictionary = Data.BREAK_EFFECTS[c.element]
 	var col: Color = Data.ELEMENT_COLORS[c.element]

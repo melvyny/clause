@@ -10,8 +10,10 @@ A playable **one-run vertical slice** (~15–20 min) of a roguelite monster-coll
 | 青花瓷盘地图 · Plate map | 金缮修补 · Gold mending |
 |---|---|
 | ![map](docs/map_zh.png) | ![mend](docs/mend_zh.png) |
-| **战斗 · Battle** | **釉片奖励 · Glaze shards** |
+| **首领战：意图、裂纹、相生 · Boss: intents, crack, chains** | **奖励：器艺或釉片 · Reward: upgrade or shard** |
 | ![battle](docs/battle_en.png) | ![reward](docs/reward_en.png) |
+| **规则页：五行 · 崩裂 · 相生 · Rules page** | **器灵图鉴：羁绊与器艺 · Codex: traits & upgrades** |
+| ![rules](docs/rules_zh.png) | ![codex](docs/codex_zh.png) |
 
 ## 运行 · Run
 
@@ -30,16 +32,19 @@ A playable **one-run vertical slice** (~15–20 min) of a roguelite monster-coll
 每一只角色都是**真实存在的传世名瓷**化成的漫画形象；数据里记录了原型的国家、年代和器物名（`origin` 字段），以后可以扩展到代尔夫特、迈森、伊万里、伊兹尼克等其他国家的瓷器。器身用"旋转成型"（像拉坯一样）生成，釉面按真实工艺着色。
 *Every character is a **real, museum-famous porcelain piece** drawn as a cartoon. Each carries an `origin` (country, era, piece), so the roster can grow to Delft, Meissen, Imari, Iznik and beyond. Bodies are lathe-turned like thrown pottery; glazes follow the real techniques.*
 
-| 器灵 Spirit | 原型文物 Real piece | 元素 | 定位 Role | 釉面 Glaze |
-|---|---|---|---|---|
-| 鸡缸杯 Chicken Cup | 明·成化斗彩鸡缸杯 · Ming Chenghua doucai cup | 火 Fire | 输出 Striker | 斗彩 doucai enamels |
-| 虎枕 Tiger Pillow | 宋金·磁州窑虎形枕 · Cizhou tiger pillow | 火 Fire | 斗士 Bruiser | 白地黑花 + 虎纹 |
-| 汝窑莲碗 Ru Lotus Bowl | 北宋·汝窑天青釉莲花式温碗 · Ru ware lotus bowl | 水 Water | 辅助 Support | 天青 + 冰裂纹 crackle |
-| 将军罐 General Jar | 清·康熙青花将军罐 · Kangxi blue-and-white jar | 水 Water | 坦克 Tank | 青花 blue-and-white |
-| 三彩马 Sancai Steed | 唐·三彩马 · Tang sancai horse | 风 Wind | 控速 Tempo | 三彩流釉 running glaze |
-| 凤耳瓶 Phoenix Vase | 南宋·龙泉窑青釉凤耳瓶 · Longquan celadon vase | 风 Wind | 刺客 Assassin | 梅子青 celadon |
-| 孩儿枕 Child Pillow | 北宋·定窑白釉孩儿枕 · Ding ware child pillow | 光 Light | 治疗 Healer | 象牙白 ivory |
-| 曜变盏 Yohen Bowl | 南宋·建窑曜变天目盏 · Jian "yohen" tea bowl | 暗 Dark | 法师 Caster | 曜变星斑 + 兔毫 |
+| 器灵 Spirit | 原型文物 Real piece | 五行 | 胎厚 Tough | 羁绊 Traits | 定位 Role |
+|---|---|---|---|---|---|
+| 鸡缸杯 Chicken Cup | 明·成化斗彩鸡缸杯 · Ming Chenghua doucai cup | 火 Fire | 90 | 大明 · 彩绘 | 输出 Striker |
+| 虎枕 Tiger Pillow | 宋金·磁州窑虎形枕 · Cizhou tiger pillow | 火 Fire | 120 | 宋韵 · 彩绘 | 斗士 Bruiser |
+| 汝窑莲碗 Ru Lotus Bowl | 北宋·汝窑天青釉莲花式温碗 · Ru ware lotus bowl | 水 Water | 100 | 宋韵 · 单色釉 | 辅助 Support |
+| 将军罐 General Jar | 清·康熙青花将军罐 · Kangxi blue-and-white jar | 水 Water | 150 | 康乾 · 彩绘 | 坦克 Tank |
+| 三彩马 Sancai Steed | 唐·三彩马 · Tang sancai horse | 土 Earth | 95 | 盛唐 · 彩绘 | 控速 Tempo |
+| 凤耳瓶 Phoenix Vase | 南宋·龙泉窑青釉凤耳瓶 · Longquan celadon vase | 木 Wood | 80 | 宋韵 · 单色釉 | 刺客 Assassin |
+| 孩儿枕 Child Pillow | 北宋·定窑白釉孩儿枕 · Ding ware child pillow | 金 Metal | 100 | 宋韵 · 单色釉 | 治疗 Healer |
+| 曜变盏 Yohen Bowl | 南宋·建窑曜变天目盏 · Jian "yohen" tea bowl | 金 Metal | 90 | 宋韵 · 单色釉 | 法师 Caster |
+
+每只器灵有 **4 个器艺**（强化），名字都是它身上的真实工艺：鸡缸杯的「开光」「铜红」、汝窑的「蟹爪纹」「满釉支烧」、凤耳瓶的「薄胎」「粉青」……
+*Each spirit has **4 craft techniques** (upgrades) named after real techniques on that piece.*
 
 每只器灵都有**专属招牌动作**（`po_anims.gd`）：鸡缸杯跳过去连啄三下，将军罐掀起罐盖飞到敌人头顶砸下，凤耳瓶的两只凤耳离开瓶身俯冲，孩儿枕把绣球抛出去再弹回来，虎枕伏低蓄力后飞扑，三彩马扬蹄踏地，汝窑莲碗前倾泼水，曜变盏倾倒星屑。
 *Each spirit has **signature moves** (`po_anims.gd`): the rooster hops in and pecks, the General Jar hurls its lid onto the target, the phoenix handles detach and dive, the Child Pillow throws its ball, the tiger crouches and pounces, and more.*
@@ -60,21 +65,26 @@ Title → choose a starting trio → travel 8 floors across the **porcelain plat
 
 | 节点 Node | 内容 Content |
 |---|---|
-| 战 Battle / 精 Elite | 4v4 以内的攻击条战斗；胜利得金子，并从 3 块釉片中选 1。*ATB battles; win gold and pick 1 of 3 glaze shards* |
-| 窑 Kiln | 招募新瓷偶（最多 4 只）。*Recruit a new figure (team of up to 4)* |
+| 战 Battle / 精 Elite | 4v4 以内的攻击条战斗；胜利得金子，并从器艺和釉片中 3 选 1。*ATB battles; win gold and pick 1 of 3 craft upgrades / glaze shards* |
+| 窑 Kiln | 招募新器灵（最多 4 只），或"回炉"学一个器艺。*Recruit (team of up to 4) or refire a spirit for an upgrade* |
 | 缮 Mending Hall | 金缮修补碎裂的瓷偶，或全队休整。*Mend shattered figures or rest* |
-| 市 Shop | 购买釉片、修复釉浆。*Buy glaze shards, repair slip* |
+| 市 Shop | 购买釉片、器艺、修复釉浆。*Buy glaze shards, an upgrade, repair slip* |
 | 奇 Encounter | 3 个带选择的事件。*3 choice events* |
 | 王 Boss | 无缮之王：场上有单位碎裂时它会变强。*The Unmended grows stronger whenever anything shatters* |
 
 ## 战斗 · Combat
 
 - **攻击条 ATB**：每 tick 攻击条增加 速度×7%，先满者行动；顶部显示接下来 8 个行动者。*SPD-driven Attack Bar with an 8-turn forecast.*
-- **属性克制 Elements**：火→风→水→火，光⇄暗。*Fire→Wind→Water→Fire, Light⇄Dark.*
-- **元素裂变 Element Fission**：伤害会留下元素印记，用另一种元素命中带印记的目标会触发 6 种反应：焰暴、蒸腾、冰封、湮灭、辉光、蚀裂。*Marks + 6 reactions (Firestorm, Steam, Frostbind, Annihilation, Radiance, Corrosion).*
-- **奥义 Ultimates**：靠灵力充能（行动 +25、受击 +8、击杀 +15）。*Charged by energy.*
-- **信息透明**：瞄准时显示预计伤害、能否击杀、实际命中率、将触发的裂变。*Targeting previews damage, lethal, landing chance and reactions.*
-- **15 块釉片**：改写规则，而不只是加数值，比如「双印：裂变后保留印记，可以连锁」「碎瓷锋：队友碎裂时全队拉条并强化」。*Rule-bending relics, e.g. chain reactions, rally on shatter.*
+完整规则、公式、平衡目标和模拟数据见 **[docs/DESIGN.md](docs/DESIGN.md)**。*Full rules, formulas, targets and simulation data: [docs/DESIGN.md](docs/DESIGN.md).*
+
+- **五行 Five Phases**：金木水火土，每种都是一门瓷器工艺（金缮、草木灰釉、钴料、窑火、胎土）。**相克**（金克木、木克土、土克水、水克火、火克金）伤害 +25%、裂纹 +50%。*Each element is a porcelain craft; overcoming = +25% damage, +50% crack.*
+- **裂纹与崩裂 Crack & Break**：攻击会在目标身上留下裂纹，达到**胎厚**就会**崩裂**：攻击条 -35%、**打断**它蓄力的招式、受到伤害 +30%，并按击碎者的元素触发**窑变**（金缮护盾、灰釉治疗、冷缩减速、起泡灼烧、塌陷破防）。治疗会先用金子补裂纹。*Hits build crack up to toughness; a break knocks the ATB back 35%, interrupts the telegraphed move, adds +30% damage taken and fires an element-specific kiln effect. Heals mend crack.*
+- **相生连携 Chains**：同一方上一个行动的队友的元素**生**你的元素（木生火、火生土、土生金、金生水、水生木），你就接上一段相生：伤害 +15%、裂纹 +25%、灵力 +10，最多 5 段。行动预测里金环头像就是会连上的。*If the previous ally to act feeds your element, you chain: +15% damage, +25% crack, +10 energy per link.*
+- **敌人意图 Intents**：敌人头顶显示下一步要放什么、打谁；在它行动前把它打崩裂就能打断。*Enemies telegraph their next move and target; break them first to interrupt.*
+- **羁绊 Traits**：宋韵、彩绘、单色釉、五行、盛唐/大明/康乾，来自每件文物真实的朝代和工艺。*Team traits from each piece's real dynasty and technique.*
+- **奥义 Ultimates**：靠灵力充能（行动 +25、受击 +8、击杀 +15、相生 +10）。*Charged by energy.*
+- **信息透明**：瞄准时显示预计伤害、裂纹、是否崩裂/打断、能否击杀、实际命中率。*Targeting previews damage, crack, break/interrupt, lethal and landing chance.*
+- **15 块釉片**：改写规则，比如「冷热骤变：崩裂时追加伤害」「连窑：相生额外灵力」「金粉瓶：第一个碎裂的队友当场重组」。*Rule-bending relics.*
 
 ## 美术 · Art direction
 
@@ -107,5 +117,6 @@ Title → choose a starting trio → travel 8 floors across the **porcelain plat
 
 ```bash
 godot --headless --path . -- --gm-autotest                       # AI 自动打完一整局 · AI plays a full run
+godot --headless --path . -- --gm-sim=12                         # 平衡模拟 · balance simulation table
 godot --path . -- --gm-demo=map --gm-shot=map.png --gm-lang=en   # 截图 · screenshot (title|map|battle|mend|reward|end)
 ```

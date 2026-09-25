@@ -214,7 +214,7 @@ func _build_top() -> void:
 	_speed_btn = _icon_button(Icons.tex("speed"), func(): return "[b]%s[/b]" % I18n.s("speed", [int(Engine.time_scale)]))
 	_speed_btn.pressed.connect(func(): speed_pressed.emit())
 	var rules := _icon_button(Icons.tex("book"), func(): return "[b]%s[/b]" % I18n.s("legend"))
-	rules.pressed.connect(func(): _rules.visible = not _rules.visible)
+	rules.pressed.connect(toggle_rules)
 	var log_btn := _icon_button(Icons.tex("scroll"), func(): return "[b]%s[/b]" % I18n.s("log"))
 	log_btn.pressed.connect(func(): _log_panel.visible = not _log_panel.visible)
 	var console_btn := _icon_button(Icons.tex("gear"), func(): return "[b]%s[/b]" % I18n.s("console"))
@@ -222,6 +222,10 @@ func _build_top() -> void:
 	for b in [_auto_btn, _speed_btn, rules, log_btn, console_btn]:
 		btns.add_child(b)
 	root.add_child(btns)
+
+
+func toggle_rules() -> void:
+	_rules.visible = not _rules.visible
 
 
 func _build_skill_bar() -> void:
@@ -316,9 +320,10 @@ func _build_rules() -> void:
 	var t := RichTextLabel.new()
 	t.bbcode_enabled = true
 	t.fit_content = true
-	t.custom_minimum_size = Vector2(700, 0)
+	t.custom_minimum_size = Vector2(940, 0)
 	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	t.add_theme_font_size_override("normal_font_size", 15)
+	t.add_theme_font_size_override("normal_font_size", 14)
+	t.add_theme_font_size_override("bold_font_size", 14)
 	_rules_text(t)
 	_rules.add_child(t)
 	_rules.visible = false
@@ -327,6 +332,17 @@ func _build_rules() -> void:
 
 static func element_bb(e: int) -> String:
 	return "[color=#%s]%s[/color]" % [Data.ELEMENT_COLORS[e].to_html(false), I18n.element(e)]
+
+
+## "金克木 · 木克土 · ..." walking a five-phase cycle from `start`.
+static func _relation_line(rel: Dictionary, start: int, word: String) -> String:
+	var parts: Array = []
+	var e := start
+	for i in 5:
+		var nxt: int = rel[e]
+		parts.append(element_bb(e) + word + element_bb(nxt))
+		e = nxt
+	return " · ".join(parts)
 
 
 ## Shared by the battle rules page and the title-screen guide.
@@ -338,12 +354,12 @@ static func _rules_text(t: RichTextLabel) -> void:
 		t.append_text(" %s %s   " % [element_bb(e), Data.ELEMENT_CRAFT[e].en if I18n.en() else Data.ELEMENT_CRAFT[e].zh])
 		if e == 2:
 			t.append_text("\n")
-	t.append_text("\n" + I18n.s("rules_ke", [element_bb(E.METAL), element_bb(E.WOOD), element_bb(E.EARTH), element_bb(E.WATER), element_bb(E.FIRE)]))
-	t.append_text("\n" + I18n.s("rules_sheng", [element_bb(E.WOOD), element_bb(E.FIRE), element_bb(E.EARTH), element_bb(E.METAL), element_bb(E.WATER)]))
+	t.append_text("\n" + I18n.s("rules_ke", [_relation_line(Data.KE, E.METAL, I18n.s("ke_word"))]))
+	t.append_text("\n" + I18n.s("rules_sheng", [_relation_line(Data.SHENG, E.WOOD, I18n.s("sheng_word"))]))
 	t.append_text("\n\n[color=#e6b35f][b]%s[/b][/color]\n%s\n" % [I18n.s("rules_crack_title"), I18n.s("rules_crack")])
 	for e in 5:
 		var be: Dictionary = Data.BREAK_EFFECTS[e]
-		t.append_text("  %s [b]%s[/b] %s\n" % [element_bb(e), I18n.f(be, "name"), I18n.f(be, "desc")])
+		t.append_text("  %s · [b]%s[/b]  %s\n" % [element_bb(e), I18n.f(be, "name"), I18n.f(be, "desc")])
 	t.append_text("\n[color=#e6b35f][b]%s[/b][/color]\n%s\n" % [I18n.s("rules_chain_title"), I18n.s("rules_chain")])
 	t.append_text("\n[color=#e6b35f][b]%s[/b][/color]\n%s\n" % [I18n.s("rules_intent_title"), I18n.s("rules_intent")])
 	t.append_text("\n[color=#e6b35f][b]%s[/b][/color]\n" % I18n.s("statuses"))

@@ -67,10 +67,12 @@ const ENERGY_PER_ACTION := 25.0
 const ENERGY_ON_HIT := 8.0
 const ENERGY_ON_KILL := 15.0
 const BROKEN_DAMAGE_TAKEN := 1.3    # while a figure is 崩裂 (broken)
+const BREAK_ATB := 35.0             # a break knocks the Attack Bar back this much
 const CHAIN_DAMAGE_STEP := 0.15     # 相生 chain: +15% damage per link after the first
 const CHAIN_CRACK_STEP := 0.25
 const CHAIN_ENERGY := 10.0
 const CHAIN_MAX := 5
+const MONO_CHAIN := 1.3             # Monochrome trait: chain bonuses x1.3
 const MEND_CRACK := 30.0            # healing skills also mend this much crack
 
 
@@ -156,18 +158,18 @@ const SPECIES := {
 		"base": {"hp": 5400, "atk": 600, "def": 520, "spd": 104, "crit_rate": 15, "crit_dmg": 50, "acc": 25, "res": 25},
 		"leader": {"stat": "hp_pct", "value": 18},
 		"passive": {"id": "moon_dew", "name": "雨过天青", "name_en": "After the Rain",
-			"desc": "回合开始时，为生命最低的队友恢复8%最大生命。", "desc_en": "At turn start, heals the lowest-HP ally for 8% max HP."},
+			"desc": "回合开始时，为生命最低的队友恢复6%最大生命。", "desc_en": "At turn start, heals the lowest-HP ally for 6% max HP."},
 		"skills": [
 			{"name": "碗中涟漪", "name_en": "Ripple", "cd": 0, "target": "enemy", "mult": 3.2, "hits": 1, "crack": 25, "anim": "projectile",
 				"desc": "泼出一道碗中之水，削减目标20%攻击条。", "desc_en": "Splashes water from its bowl and cuts the target's Attack Bar by 20%.",
 				"effects": [{"type": "atb_reduce", "amount": 20, "chance": 100}]},
 			{"name": "温碗", "name_en": "Warming Bowl", "cd": 3, "target": "all_allies", "mult": 0.0, "hits": 0, "crack": 0, "anim": "cast",
-				"desc": "为全体队友恢复22%最大生命、修补裂纹，并清除所有减益。", "desc_en": "Heals all allies for 22% max HP, mends their cracks and removes all harmful effects.",
-				"effects": [{"type": "heal_allies", "pct": 22}, {"type": "cleanse_allies"}]},
+				"desc": "为全体队友恢复18%最大生命、修补裂纹，并清除所有减益。", "desc_en": "Heals all allies for 18% max HP, mends their cracks and removes all harmful effects.",
+				"effects": [{"type": "heal_allies", "pct": 18}, {"type": "cleanse_allies"}]},
 			{"name": "天青云破", "name_en": "Sky Breaks Blue", "cd": 0, "target": "all_allies", "mult": 0.0, "hits": 0, "crack": 0, "anim": "ultimate",
-				"desc": "【奥义】全体队友恢复15%生命、攻击条+30%、获得【防御强化】2回合。",
-				"desc_en": "ULTIMATE: All allies heal 15% HP, gain 30% Attack Bar and Defense Up for 2 turns.",
-				"effects": [{"type": "heal_allies", "pct": 15}, {"type": "atb_boost_allies", "amount": 30},
+				"desc": "【奥义】全体队友恢复12%生命、攻击条+30%、获得【防御强化】2回合。",
+				"desc_en": "ULTIMATE: All allies heal 12% HP, gain 30% Attack Bar and Defense Up for 2 turns.",
+				"effects": [{"type": "heal_allies", "pct": 12}, {"type": "atb_boost_allies", "amount": 30},
 					{"type": "buff_allies", "status": "def_up", "turns": 2}]},
 		],
 		"upgrades": [
@@ -230,19 +232,19 @@ const SPECIES := {
 				"desc": "扔出一个绣球，50%几率【防御破坏】2回合。", "desc_en": "Throws an embroidered ball. 50% chance to Break Defense for 2 turns.",
 				"effects": [{"type": "debuff", "status": "def_break", "turns": 2, "chance": 50}]},
 			{"name": "哄睡", "name_en": "Lullaby", "cd": 4, "target": "all_allies", "mult": 0.0, "hits": 0, "crack": 0, "anim": "cast",
-				"desc": "哼一首摇篮曲：全体队友恢复25%生命、修补裂纹，获得【免疫】1回合。", "desc_en": "A lullaby: all allies heal 25%, mend their cracks and gain Immunity for 1 turn.",
-				"effects": [{"type": "heal_allies", "pct": 25}, {"type": "buff_allies", "status": "immunity", "turns": 1}]},
+				"desc": "哼一首摇篮曲：全体队友恢复20%生命、修补裂纹，获得【免疫】1回合。", "desc_en": "A lullaby: all allies heal 20%, mend their cracks and gain Immunity for 1 turn.",
+				"effects": [{"type": "heal_allies", "pct": 20}, {"type": "buff_allies", "status": "immunity", "turns": 1}]},
 			{"name": "黄粱一梦", "name_en": "Dream of Millet", "cd": 0, "target": "all_enemies", "mult": 2.5, "hits": 1, "crack": 25, "anim": "ultimate",
-				"desc": "【奥义】把梦境砸向全体敌人，随后清除全体队友减益并恢复15%生命。",
-				"desc_en": "ULTIMATE: Drops a dream on all enemies, then cleanses all allies and heals them 15%.",
-				"effects": [{"type": "cleanse_allies"}, {"type": "heal_allies", "pct": 15}]},
+				"desc": "【奥义】把梦境砸向全体敌人，随后清除全体队友减益并恢复12%生命。",
+				"desc_en": "ULTIMATE: Drops a dream on all enemies, then cleanses all allies and heals them 12%.",
+				"effects": [{"type": "cleanse_allies"}, {"type": "heal_allies", "pct": 12}]},
 		],
 		"upgrades": [
 			{"id": "cp_rim", "name": "芒口镶金", "name_en": "Gilded Rim", "desc": "哄睡额外给全队10%护盾。", "desc_en": "Lullaby also shields every ally for 10%.",
 				"mods": [{"skill": 1, "add_effect": {"type": "shield_allies", "pct": 10}}]},
 			{"id": "cp_stamp", "name": "印花", "name_en": "Stamped Pattern", "desc": "丢枕头裂纹+20。", "desc_en": "Pillow Toss deals +20 crack.",
 				"mods": [{"skill": 0, "crack": 20}]},
-			{"id": "cp_dream", "name": "一梦千年", "name_en": "A Thousand-Year Nap", "desc": "黄粱一梦治疗提高到25%。", "desc_en": "Dream of Millet heals 25%.",
+			{"id": "cp_dream", "name": "一梦千年", "name_en": "A Thousand-Year Nap", "desc": "黄粱一梦治疗提高到22%。", "desc_en": "Dream of Millet heals 22%.",
 				"mods": [{"skill": 2, "heal_add": 10}]},
 			{"id": "cp_carve", "name": "刻花", "name_en": "Carved Lotus", "desc": "哄睡冷却-1。", "desc_en": "Lullaby cooldown -1.",
 				"mods": [{"skill": 1, "cd": -1}]},
@@ -255,7 +257,7 @@ const SPECIES := {
 			"piece": "磁州窑白地黑花虎形枕", "piece_en": "Cizhou ware tiger-shaped pillow"},
 		"lore": "给人枕了几百年，终于轮到它发脾气了。背上还画着一幅山水。",
 		"lore_en": "People slept on it for centuries. Now it's the tiger's turn to lose its temper. A landscape is still painted on its back.",
-		"base": {"hp": 5600, "atk": 750, "def": 560, "spd": 98, "crit_rate": 20, "crit_dmg": 60, "acc": 20, "res": 20},
+		"base": {"hp": 5600, "atk": 790, "def": 560, "spd": 98, "crit_rate": 20, "crit_dmg": 60, "acc": 20, "res": 20},
 		"leader": {"stat": "def_pct", "value": 18},
 		"passive": {"id": "stoked", "name": "起床气", "name_en": "Rude Awakening",
 			"desc": "每次受到攻击，攻击条+10%。", "desc_en": "Gains 10% Attack Bar whenever it is hit."},
@@ -406,7 +408,7 @@ const TRAITS := {
 	"painted": {"name": "彩绘", "name_en": "Painted", "tiers": [2, 3],
 		"desc": ["全队裂纹+20%", "全队裂纹+40%，击碎敌人时击碎者灵力+20"], "desc_en": ["Team crack +20%", "Team crack +40%; breaking an enemy gives the breaker 20 energy"]},
 	"mono": {"name": "单色釉", "name_en": "Monochrome", "tiers": [2, 3],
-		"desc": ["相生加成×1.5", "相生加成×1.5，每次相生为行动者恢复6%生命"], "desc_en": ["Chain bonus x1.5", "Chain bonus x1.5; each chain link heals the actor 6%"]},
+		"desc": ["相生加成×1.3", "相生加成×1.3，每次相生为行动者恢复6%生命"], "desc_en": ["Chain bonus x1.3", "Chain bonus x1.3; each chain link heals the actor 6%"]},
 	"wuxing": {"name": "五行", "name_en": "Five Phases", "tiers": [3, 4],
 		"desc": ["3种元素：开局攻击条+15%", "4种元素：开局攻击条+30%"], "desc_en": ["3 elements: start with 15% Attack Bar", "4 elements: start with 30% Attack Bar"]},
 	"tang": {"name": "盛唐", "name_en": "High Tang", "tiers": [2], "desc": ["全队速度+8"], "desc_en": ["Team SPD +8"]},
@@ -453,10 +455,10 @@ static func trait_counts(species_ids: Array) -> Dictionary:
 # --- Boss ----------------------------------------------------------------------------
 const BOSS := {
 	"name": "无缮之王", "name_en": "The Unmended", "element": Element.EARTH, "role": "首领", "role_en": "Boss",
-	"tags": [], "toughness": 320,
+	"tags": [], "toughness": 420,
 	"origin": {"country": "？", "country_en": "?", "era": "不详", "era_en": "Unknown", "piece": "一只从未被修补的大罐", "piece_en": "A great jar that was never mended"},
 	"lore": "所有拒绝被金子补好的碎片，聚成了它。", "lore_en": "Every shard that refused the gold gathered into this.",
-	"base": {"hp": 5200, "atk": 760, "def": 520, "spd": 100, "crit_rate": 20, "crit_dmg": 60, "acc": 35, "res": 40},
+	"base": {"hp": 5200, "atk": 960, "def": 540, "spd": 110, "crit_rate": 20, "crit_dmg": 60, "acc": 35, "res": 40},
 	"leader": {},
 	"passive": {"id": "unmended", "name": "拒绝修补", "name_en": "Refuses the Gold",
 		"desc": "场上每有单位碎裂，攻击条+25%并恢复6%生命。生命低于50%时狂怒，攻击+30%。",

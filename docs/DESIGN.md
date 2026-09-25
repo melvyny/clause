@@ -44,7 +44,7 @@ Why five instead of fire/water/wind/light/dark: the old triangle plus a pair onl
 - Every damaging skill has a `crack` value: the total crack it puts on each target, split across its hits.
 - Every figure has **toughness (胎厚)**: chicken cup 90, phoenix vase 80 (thin-bodied), General Jar 150 (thick-walled), boss 320.
 - At full crack the figure **breaks (崩裂)**:
-  1. Its Attack Bar drops to 0.
+  1. Its Attack Bar is knocked back by 35%. An earlier build reset it to 0; enemies that broke fragile spirits right before they acted then denied them almost every turn.
   2. If it is an enemy with a telegraphed skill or ultimate, the move is **interrupted** and becomes a basic attack.
   3. It takes **+30% damage** until its next turn starts. At that point its crack resets to 0.
   4. The breaker's element fires a **kiln effect (窑变)** (table above).
@@ -56,7 +56,7 @@ Crack formula per hit:
 ```
 crack = skill.crack / hits
       × (1.5 overcoming | 0.7 overcome | 1.0)
-      × (1 + 0.25 × chain × (1.5 if Monochrome))
+      × (1 + 0.25 × chain × (1.3 if Monochrome))
       × (1.2 / 1.4 with Painted 2 / 3)
 ```
 
@@ -83,7 +83,7 @@ Counted over the fielded team (up to 4). Tags come from each piece's real histor
 |---|---|---|
 | 宋韵 Song Grace | 宋代名窑 · Song-dynasty wares (汝、定、龙泉、建、磁州) | 2: toughness +25% · 4: damage taken -12% |
 | 彩绘 Painted | 釉上/釉下彩绘 · painted decoration (斗彩、青花、三彩、白地黑花) | 2: crack +20% · 3: crack +40%, breaking gives 20 energy |
-| 单色釉 Monochrome | 一色釉 · single-colour glazes (汝、定、龙泉、建) | 2: chain bonus ×1.5 · 3: each link also heals 6% |
+| 单色釉 Monochrome | 一色釉 · single-colour glazes (汝、定、龙泉、建) | 2: chain bonus ×1.3 · 3: each link also heals 6% |
 | 五行 Five Phases | 队伍里不同元素数 · distinct elements | 3: start with 15% ATB · 4: start with 30% ATB |
 | 盛唐 / 大明 / 康乾 Tang / Ming / Qing | 朝代 · dynasty | 2: SPD +8 / crit +12% / HP +12% |
 

@@ -5,9 +5,10 @@ extends Node
 ##
 ## Command-line (after `--`):
 ##   --gm-autotest              plays a whole run with the AI, prints a summary, quits
-##   --gm-demo=<screen>         jump to title|map|battle|mend|reward (for screenshots)
+##   --gm-demo=<screen>         jump to title|map|battle|boss|mend|reward|end|codex (for screenshots)
 ##   --gm-shot=<path.png>       save a screenshot after --gm-shot-delay=<sec>, then quit
 ##   --gm-lang=<zh|en>          force the language
+##   --gm-rules                 open the battle rules page (screenshots)
 ##   --gm-sim[=N]               balance simulation: N fast battles per floor & starter, prints a table, quits
 
 const Data = preload("po_data.gd")
@@ -92,6 +93,13 @@ func _ready() -> void:
 		"battle":
 			run.new_run(0, 7)
 			_enter_battle("battle", 1)
+		"boss":
+			run.new_run(2, 7)
+			run.recruit("tigerpillow")
+			for m in run.party:
+				m.level = 10
+			set_auto(true)
+			_enter_battle("boss", 8)
 		"mend":
 			run.new_run(1, 7)
 			run.party[0].shattered = true
@@ -682,12 +690,21 @@ func _enter_battle(kind: String, row: int) -> void:
 	battle.auto_battle = auto_battle
 	battle.cheat_no_cd = cheats.no_cd
 	battle.cheat_max_atb = cheats.max_atb
+	battle.trace = "--gm-trace" in _args
 	battle.floor_text = I18n.s("floor", [row, Run.ROWS - 1])
 	battle.banner_text = {"battle": I18n.s("floor_banner", [row]), "elite": I18n.s("elite_banner"), "boss": I18n.s("boss_banner")}[kind]
 	battle.banner_sub = I18n.f(Data.NODE_TYPES[kind], "name")
 	world.add_child(battle)
 	_fade_in()
-	battle.begin(run.ally_specs(), run.enemy_specs(row, kind), run.relics)
+	var allies := run.ally_specs()
+	var enemies := run.enemy_specs(row, kind)
+	if _autotest:
+		print("AUTOTEST enter %s row=%d allies=%s enemies=%s" % [kind, row,
+			allies.map(func(a): return "%s %d/%d spd%d" % [a.species, int(a.hp), int(a.stats.hp), int(a.stats.spd)]),
+			enemies.map(func(e): return "%s L%d spd%d" % [e.species, int(e.level), int(e.stats.spd)])])
+	battle.begin(allies, enemies, run.relics)
+	if "--gm-rules" in _args:
+		battle.hud.toggle_rules()
 	var result: Array = await battle.finished
 	var victory: bool = result[0]
 	var report: Dictionary = result[1]
@@ -1086,6 +1103,7 @@ func _simulate(n: int) -> void:
 					r.relics.append_array(r.relic_choices(1))
 				var b := Battle.new()
 				b.fast = true
+				b.trace = "--gm-trace" in _args
 				b.audio = audio
 				b.auto_battle = true
 				world.add_child(b)
