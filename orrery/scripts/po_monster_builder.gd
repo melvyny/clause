@@ -244,6 +244,7 @@ static func _chicken_cup(k: Kit) -> void:
 	var fire := M.particles(Color(1.0, 0.45, 0.15, 0.9), 22, 0.6, 0.22, 1.0, Vector3.UP, 20, Vector3(0, 1.4, 0), 0.08)
 	fire.position = Vector3(0, 0.4, 0.0)
 	head.add_child(fire)
+	k.root.set_meta("parts", {"body": body, "bird": bird, "head": head, "tail": tail})
 	k.root.set_meta("height", 2.2)
 	k.root.set_meta("radius", 0.8)
 
@@ -278,6 +279,7 @@ static func _ru_lotus(k: Kit) -> void:
 	var drops := M.particles(Color(0.6, 0.9, 1.0, 0.9), 26, 1.6, 0.1, 0.6, Vector3.UP, 50, Vector3(0, -0.5, 0), 0.6)
 	drops.position = Vector3(0, 0.8, 0)
 	body.add_child(drops)
+	k.root.set_meta("parts", {"bowl": body, "water": water})
 	k.root.set_meta("height", 1.9)
 	k.root.set_meta("radius", 0.95)
 
@@ -320,6 +322,7 @@ static func _sancai_horse(k: Kit) -> void:
 	var dust := M.particles(Color(0.9, 0.8, 0.5, 0.7), 20, 1.0, 0.18, 1.2, Vector3.UP, 30, Vector3(0, 0.5, 0), 0.6, false)
 	dust.position = Vector3(0, 0.1, 0.4)
 	body.add_child(dust)
+	k.root.set_meta("parts", {"body": body, "neck": neck, "head": head, "tail": tail})
 	k.root.set_meta("height", 2.4)
 	k.root.set_meta("radius", 0.85)
 
@@ -359,6 +362,7 @@ static func _child_pillow(k: Kit) -> void:
 	var z := M.particles(Color(1.0, 0.95, 0.7, 0.9), 10, 2.0, 0.12, 0.35, Vector3(0.3, 1, 0), 15, Vector3.ZERO, 0.1)
 	z.position = Vector3(0.3, 0.4, 0)
 	head.add_child(z)
+	k.root.set_meta("parts", {"body": body, "head": head, "ball": ball})
 	k.root.set_meta("height", 1.55)
 	k.root.set_meta("radius", 0.85)
 
@@ -397,6 +401,7 @@ static func _tiger_pillow(k: Kit) -> void:
 	var embers := M.particles(Color(1.0, 0.6, 0.25, 0.8), 14, 1.2, 0.1, 0.8, Vector3.UP, 40, Vector3(0, 0.3, 0), 0.5)
 	embers.position = Vector3(0, 0.8, 0)
 	body.add_child(embers)
+	k.root.set_meta("parts", {"body": body, "head": head, "tail": tail})
 	k.root.set_meta("height", 1.45)
 	k.root.set_meta("radius", 1.0)
 
@@ -437,6 +442,7 @@ static func _general_jar(k: Kit) -> void:
 	M.add_mesh(halberd, M.prism(Vector3(0.3, 0.18, 0.02), 0.0), M.brass(Color(0.9, 0.9, 0.95), 0.2), Vector3(0.12, 1.5, 0), Vector3(0, 0, -90))
 	k.bob(spear_arm, 0.04, 1.3, 1.5)
 	k.muzzle(jar, Vector3(0, 1.1, -0.8))
+	k.root.set_meta("parts", {"body": body, "jar": jar, "lid": lid, "shield_arm": shield_arm, "spear_arm": spear_arm})
 	k.root.set_meta("height", 2.45)
 	k.root.set_meta("radius", 1.0)
 
@@ -451,8 +457,10 @@ static func _phoenix_vase(k: Kit) -> void:
 	M.add_mesh(body, lathe(pv([[0.0, 0.0], [0.34, 0.0], [0.38, 0.06], [0.44, 0.12], [0.47, 0.75], [0.4, 0.95], [0.2, 1.08], [0.15, 1.2], [0.14, 1.85], [0.2, 1.98], [0.26, 2.02], [0.0, 2.02]]), 48), k.mat(glaze))
 	k.eyes(body, Vector3(0, 0.6, -0.46), 0.16, 0.08, "fierce")
 	# the two phoenix handles
+	var phs: Array = []
 	for side in [-1.0, 1.0]:
 		var ph := k.node(body, Vector3(side * 0.2, 1.55, 0), Vector3(0, 0, side * -10))
+		phs.append(ph)
 		k.bob(ph, 0.05, 2.4, side)
 		M.add_mesh(ph, M.capsule(0.05, 0.4), k.mat(glaze), Vector3(side * 0.12, -0.05, 0), Vector3(0, 0, side * 50))
 		var head := k.node(ph, Vector3(side * 0.28, 0.12, -0.05))
@@ -473,6 +481,7 @@ static func _phoenix_vase(k: Kit) -> void:
 	wind.tangential_accel_max = 5.0
 	wind.position = Vector3(0, -0.2, 0)
 	body.add_child(wind)
+	k.root.set_meta("parts", {"body": body, "phoenixes": phs})
 	k.root.set_meta("height", 2.5)
 	k.root.set_meta("radius", 0.7)
 
@@ -500,6 +509,7 @@ static func _yohen_bowl(k: Kit) -> void:
 		M.add_mesh(orbit, M.sphere(0.06), M.glow(Color(0.5 + 0.1 * i, 0.4, 1.0), 4.0), Vector3(cos(a), 0.1 * sin(a * 2.0), sin(a)) * 1.0)
 	k.spin(orbit, Vector3.UP, -70.0)
 	k.muzzle(body, Vector3(0, 0.6, -0.4))
+	k.root.set_meta("parts", {"body": body, "tilt": tilt})
 	k.root.set_meta("height", 1.9)
 	k.root.set_meta("radius", 0.85)
 

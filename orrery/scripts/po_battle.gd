@@ -16,6 +16,7 @@ const VFX = preload("po_vfx.gd")
 const Cam = preload("po_camera.gd")
 const Arena = preload("po_arena.gd")
 const HUD = preload("po_hud.gd")
+const Anims = preload("po_anims.gd")
 
 enum State { INTRO, TICKING, BUSY, WAIT_INPUT, ENDED }
 
@@ -575,22 +576,30 @@ func _execute(c: Node, idx: int, target: Node) -> void:
 		"melee":
 			cam.battle_view(focus, 0.25)
 			audio.play(audio.element_sfx(c.element), -4.0)
-			await c.anim_lunge(focus)
+			var own: bool = await Anims.play(c, sk, focus)
+			if not own:
+				await c.anim_lunge(focus)
 		"projectile":
 			audio.play(audio.element_sfx(c.element), -4.0)
-			await c.anim_cast()
+			var own: bool = await Anims.play(c, sk, focus)
+			if not own:
+				await c.anim_cast()
 		"cast":
 			audio.play(audio.element_sfx(c.element))
 			vfx.ring(c.global_position, ecol, 3.0, 0.6)
 			vfx.buff_fx(c.center_position(), ecol)
-			await c.anim_cast()
+			var own: bool = await Anims.play(c, sk, focus)
+			if not own:
+				await c.anim_cast()
 		"ultimate":
 			audio.play("ultimate")
 			hud.banner(sk_name, ecol, "奥 义" if not I18n.en() else "ULTIMATE")
 			cam.battle_view(c.global_position, 0.5, 2.5)
 			vfx.pillar(c.global_position, ecol)
 			vfx.ring(c.global_position, ecol, 4.0, 0.8)
-			await c.anim_ultimate()
+			var own: bool = await Anims.play(c, sk, focus)
+			if not own:
+				await c.anim_ultimate()
 			if not _ok():
 				return
 			cam.battle_view(focus, 0.3, 2.5)
@@ -659,7 +668,8 @@ func _execute(c: Node, idx: int, target: Node) -> void:
 	await _wait(0.45)
 	if not _ok():
 		return
-	if sk.anim == "melee" and c.alive:
+	# anything that left its plinth (lunges, pounces, hops) walks back home
+	if c.alive and c.global_position.distance_to(c.home) > 0.3:
 		await c.anim_return()
 	else:
 		c.reset_facing()

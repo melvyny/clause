@@ -41,6 +41,9 @@ A playable **one-run vertical slice** (~15–20 min) of a roguelite monster-coll
 | 孩儿枕 Child Pillow | 北宋·定窑白釉孩儿枕 · Ding ware child pillow | 光 Light | 治疗 Healer | 象牙白 ivory |
 | 曜变盏 Yohen Bowl | 南宋·建窑曜变天目盏 · Jian "yohen" tea bowl | 暗 Dark | 法师 Caster | 曜变星斑 + 兔毫 |
 
+每只器灵都有**专属招牌动作**（`po_anims.gd`）：鸡缸杯跳过去连啄三下，将军罐掀起罐盖飞到敌人头顶砸下，凤耳瓶的两只凤耳离开瓶身俯冲，孩儿枕把绣球抛出去再弹回来，虎枕伏低蓄力后飞扑，三彩马扬蹄踏地，汝窑莲碗前倾泼水，曜变盏倾倒星屑。
+*Each spirit has **signature moves** (`po_anims.gd`): the rooster hops in and pecks, the General Jar hurls its lid onto the target, the phoenix handles detach and dive, the Child Pillow throws its ball, the tiger crouches and pounces, and more.*
+
 标题页的「器灵图鉴」可以查看每只器灵的原型与小传。 *Open the **Codex** from the title screen for each spirit's origin and story.*
 
 ## 核心卖点 · Core hook

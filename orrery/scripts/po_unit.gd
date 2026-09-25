@@ -50,6 +50,7 @@ var _arrow: Node3D
 var _arrow_mesh: MeshInstance3D
 var _highlight := 0
 var _porcelain: Array = []
+var _bob_paused := {}        # parts currently driven by a signature move
 var _shown_damage := 0.0
 
 
@@ -145,6 +146,8 @@ func _process(delta: float) -> void:
 			node.rotate_object_local(entry[1], deg_to_rad(entry[2]) * delta)
 	for entry in model.get_meta("bobbers"):
 		var node: Node3D = entry[0]
+		if _bob_paused.has(node):
+			continue
 		node.position.y = _base_positions[node].y + sin(_time * entry[2] + entry[3]) * entry[1]
 	var dmg := 1.0 - hp_ratio() if alive else 1.0
 	if absf(dmg - _shown_damage) > 0.002:
@@ -180,6 +183,16 @@ func play_anim(role: String) -> bool:
 	if role != "idle" and role != "death" and map.has("idle"):
 		ap.queue(map["idle"])
 	return true
+
+
+## Signature moves take over a part: stop its idle bob while they animate it.
+func pause_bob(node: Node3D, paused: bool) -> void:
+	if paused:
+		_bob_paused[node] = true
+	else:
+		_bob_paused.erase(node)
+		if _base_positions.has(node):
+			node.position = _base_positions[node]
 
 
 func set_mends(n: int) -> void:
