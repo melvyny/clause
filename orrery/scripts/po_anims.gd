@@ -74,6 +74,27 @@ static func play(u: Node3D, sk: Dictionary, target: Vector3) -> bool:
 			if kind == "melee" or kind == "ultimate":
 				await _phoenix_dive(u, parts, target, kind == "ultimate")
 				return true
+		"changshaewer":
+			if kind == "projectile":
+				await _ewer_pour(u, parts)
+				return true
+			if kind == "cast" or kind == "ultimate":
+				await _ewer_recite(u, parts, kind == "ultimate")
+				return true
+		"cimu":
+			if kind == "projectile":
+				await _cimu_turn(u, parts)
+				return true
+			if kind == "cast" or kind == "ultimate":
+				await _cimu_bands(u, parts, kind == "ultimate")
+				return true
+		"monkcap":
+			if kind == "melee":
+				await _cap_knock(u, parts, target)
+				return true
+			if kind == "cast" or kind == "ultimate":
+				await _cap_ward(u, parts, kind == "ultimate")
+				return true
 		"boss":
 			if kind == "melee":
 				await _boss_bite(u, parts, target)
@@ -488,6 +509,101 @@ static func _boss_fragments(u: Node3D, parts: Dictionary) -> void:
 	u.pause_bob(body, false)
 
 
+# --- 长沙窑诗文壶 ------------------------------------------------------------------------
+## Tips forward and pours brown pigment from the spout.
+static func _ewer_pour(u: Node3D, parts: Dictionary) -> void:
+	var pot: Node3D = parts.pot
+	_sfx("splash", -4.0, 0.8)
+	var t := u.create_tween().set_trans(Tween.TRANS_BACK)
+	t.tween_property(pot, "rotation_degrees:x", -28.0, 0.2)
+	await t.finished
+	_burst(u, u.muzzle_position(), Color(0.42, 0.24, 0.1), 24, 3.0)
+	var back := u.create_tween()
+	back.tween_interval(0.15)
+	back.tween_property(pot, "rotation_degrees:x", 0.0, 0.25)
+
+
+## Raises the brush and writes the poem into the air.
+static func _ewer_recite(u: Node3D, parts: Dictionary, big: bool) -> void:
+	var arm: Node3D = parts.arm
+	u.pause_bob(arm, true)
+	_sfx("twinkle", -4.0, 0.8)
+	var t := u.create_tween().set_trans(Tween.TRANS_SINE)
+	for i in (3 if big else 2):
+		t.tween_property(arm, "rotation_degrees:z", -40.0, 0.14)
+		t.tween_property(arm, "rotation_degrees:z", 35.0, 0.14)
+	await t.finished
+	var brush: Node3D = parts.brush
+	_burst(u, brush.global_position + Vector3.UP * 0.8, Color(0.3, 0.18, 0.08), 50 if big else 26, 5.0 if big else 3.0)
+	var back := u.create_tween()
+	back.tween_property(arm, "rotation_degrees:z", 25.0, 0.2)
+	back.tween_callback(func():
+		if is_instance_valid(u):
+			u.pause_bob(arm, false))
+
+
+# --- 瓷母 --------------------------------------------------------------------------------
+## Her glaze ring spins up and she flicks a band of colour at the target.
+static func _cimu_turn(u: Node3D, parts: Dictionary) -> void:
+	var ring: Node3D = parts.ring
+	_sfx("whoosh", -4.0, 1.2)
+	var t := u.create_tween().set_trans(Tween.TRANS_CUBIC)
+	t.tween_property(ring, "rotation:y", ring.rotation.y + TAU * 1.5, 0.35)
+	t.parallel().tween_property(ring, "scale", Vector3.ONE * 1.25, 0.35)
+	await t.finished
+	var back := u.create_tween()
+	back.tween_property(ring, "scale", Vector3.ONE, 0.2)
+
+
+## Every band lights up; for the ultimate she rises and flashes all seventeen glazes.
+static func _cimu_bands(u: Node3D, parts: Dictionary, big: bool) -> void:
+	var ring: Node3D = parts.ring
+	var vase: Node3D = parts.vase
+	_sfx("twinkle", -2.0, 0.9)
+	var t := u.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	t.tween_property(ring, "scale", Vector3.ONE * (1.8 if big else 1.4), 0.3)
+	t.parallel().tween_property(vase, "position:y", 0.6 if big else 0.25, 0.3)
+	await t.finished
+	var cols := [Color(0.55, 0.12, 0.1), Color(0.08, 0.18, 0.6), Color(0.52, 0.7, 0.62), Color(0.95, 0.85, 0.3), Color(0.8, 0.5, 0.14)]
+	for i in (5 if big else 3):
+		_burst(u, u.center_position() + Vector3.UP * (0.4 + 0.25 * i), cols[i % cols.size()], 18, 4.0)
+	await _wait(u, 0.15)
+	var back := u.create_tween()
+	back.tween_property(ring, "scale", Vector3.ONE, 0.25)
+	back.parallel().tween_property(vase, "position:y", 0.05, 0.25)
+
+
+# --- 甜白僧帽壶 ----------------------------------------------------------------------------
+## Hops over and knocks the target with the brim of its cap.
+static func _cap_knock(u: Node3D, parts: Dictionary, target: Vector3) -> void:
+	await _leap(u, target, 1.5, 0.8, 0.32)
+	var cap: Node3D = parts.cap
+	u.pause_bob(cap, true)
+	var t := u.create_tween().set_trans(Tween.TRANS_BACK)
+	t.tween_property(cap, "rotation_degrees:x", 25.0, 0.1)
+	t.tween_property(cap, "rotation_degrees:x", -55.0, 0.1)
+	await t.finished
+	_sfx("clang", -2.0, 1.2)
+	var back := u.create_tween()
+	back.tween_property(cap, "rotation_degrees:x", 0.0, 0.2)
+	back.tween_callback(func():
+		if is_instance_valid(u):
+			u.pause_bob(cap, false))
+
+
+## The orbiting gold shield whirls around it and scatters gold dust over the team.
+static func _cap_ward(u: Node3D, parts: Dictionary, big: bool) -> void:
+	var orbit: Node3D = parts.orbit
+	_sfx("twinkle", -2.0, 1.1)
+	var t := u.create_tween().set_trans(Tween.TRANS_CUBIC)
+	t.tween_property(orbit, "rotation:y", orbit.rotation.y + TAU * (3 if big else 2), 0.5)
+	t.parallel().tween_property(orbit, "scale", Vector3.ONE * (1.6 if big else 1.3), 0.25)
+	await t.finished
+	_burst(u, u.center_position() + Vector3.UP * 0.5, Color(1.0, 0.82, 0.4), 50 if big else 28, 4.5)
+	var back := u.create_tween()
+	back.tween_property(orbit, "scale", Vector3.ONE, 0.25)
+
+
 # --- Hit reactions ------------------------------------------------------------------------
 ## Species flavour on top of the shared white flash / knock-back.
 static func hit(u: Node3D, crit: bool) -> void:
@@ -524,6 +640,15 @@ static func hit(u: Node3D, crit: bool) -> void:
 		"yohenbowl":
 			_jolt(u, parts.tilt, "rotation_degrees:z", 20.0 * k)
 			_burst(u, parts.tilt.global_position, Color(0.7, 0.55, 1.0), 10, 2.0)
+		"changshaewer":
+			_jolt(u, parts.pot, "rotation_degrees:z", 15.0 * k)
+			_burst(u, parts.pot.global_position + Vector3.UP * 0.8, Color(0.42, 0.24, 0.1), 8, 2.0)
+		"cimu":
+			_jolt(u, parts.vase, "rotation_degrees:z", 9.0 * k)
+			_jolt(u, parts.ring, "rotation_degrees:x", 25.0 * k)
+		"monkcap":
+			_jolt(u, parts.cap, "rotation_degrees:x", -20.0 * k)
+			_sfx("clang", -16.0, 1.9)
 		"boss":
 			for o in parts.orbits:
 				_jolt(u, o, "rotation_degrees:z", 15.0 * k)

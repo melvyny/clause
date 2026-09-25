@@ -165,7 +165,7 @@ func enemy_specs(row: int, kind: String) -> Array:
 		var team := [pool[0], pool[1], pool[2]]
 		var traits := Data.active_traits(team)
 		out.append(_enemy(pool[0], 9, 1.0, 8, traits))
-		var st := Data.compute_stats("boss", 11, 0, 4.5)
+		var st := Data.compute_stats("boss", 11, 0, 5.5)
 		out.append({"species": "boss", "level": 11, "stats": st, "boss": true})
 		out.append(_enemy(pool[1], 9, 1.0, 8, traits))
 		out.append(_enemy(pool[2], 9, 1.0, 8, traits))

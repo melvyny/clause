@@ -10,6 +10,7 @@ extends Node
 ##   --gm-lang=<zh|en>          force the language
 ##   --gm-rules                 open the battle rules page (screenshots)
 ##   --gm-sim[=N]               balance simulation: N fast battles per floor & starter, prints a table, quits
+##                              (filters: --gm-sim-starters=0,2  --gm-sim-min-row=6)
 
 const Data = preload("po_data.gd")
 const I18n = preload("po_i18n.gd")
@@ -529,6 +530,7 @@ func show_codex() -> void:
 	_clear_world()
 	_clear_ui()
 	var codex := Codex.new()
+	codex.still = "--gm-codex-still" in _args
 	world.add_child(codex)
 	codex.selected.connect(_codex_selected)
 	var t := _label(I18n.s("codex_title"), 34, BRASS)
@@ -1083,10 +1085,20 @@ func _simulate(n: int) -> void:
 		[6, "battle"], [6, "elite"], [7, "battle"], [8, "boss"]]
 	print("SIM n=%d per cell | starter kind row | win%% ally_act turns est_sec breaks chains intr hp_left" % n)
 	var totals := {}
-	for starter in Data.STARTERS.size():
+	# optional filters: --gm-sim-starters=0,2  --gm-sim-min-row=6
+	var starters: Array = range(Data.STARTERS.size())
+	var min_row := 0
+	for a in _args:
+		if a.begins_with("--gm-sim-starters="):
+			starters = Array(a.get_slice("=", 1).split(",")).map(func(x): return int(x))
+		elif a.begins_with("--gm-sim-min-row="):
+			min_row = int(a.get_slice("=", 1))
+	for starter in starters:
 		for rk in rows:
 			var row: int = rk[0]
 			var kind: String = rk[1]
+			if row < min_row:
+				continue
 			var agg := {"win": 0, "ally_turns": 0, "turns": 0, "time": 0.0, "breaks": 0, "chains": 0, "interrupts": 0, "hp": 0.0}
 			for i in n:
 				var r := Run.new()

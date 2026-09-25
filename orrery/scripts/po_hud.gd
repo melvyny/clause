@@ -491,7 +491,7 @@ func update_units(cam: Camera3D) -> void:
 			crack_fill.bg_color = Color(0.95, 0.93, 0.85).lerp(Color(1.0, 0.55, 0.3), u.crack_ratio())
 		p.atb.value = minf(u.atb, 100.0)
 		p.en.value = u.energy / u.ult_cost * 100.0
-		var key := "%s|%s|%s" % [u.broken, str(u.statuses), u.ultimate_ready()]
+		var key := "%s|%s|%s|%d" % [u.broken, str(u.statuses), u.ultimate_ready(), u.element]
 		if key != p.key:
 			p.key = key
 			_fill_status(p.status, u)
@@ -529,6 +529,9 @@ func _fill_intent(row: HBoxContainer, u: Node) -> void:
 func _fill_status(row: HBoxContainer, u: Node) -> void:
 	for c in row.get_children():
 		c.queue_free()
+	if u.passive_id == "seventeen":
+		# the Mother of Porcelain's current glaze
+		row.add_child(_icon(Icons.element(u.element, 40), 20))
 	if u.broken:
 		row.add_child(_icon(Icons.tex("broken", Color(0.7, 0.2, 0.15), 40), 20))
 	for s in u.statuses:

@@ -342,6 +342,8 @@ func _run_turn(u: Node) -> void:
 		u.cooldowns[i] = maxi(0, int(u.cooldowns[i]) - 1)
 	u.set_meta("killed", false)
 
+	if u.passive_id == "unmended":
+		u.set_meta("rage", int(u.get_meta("rage", 0)) + 1)
 	if u.passive_id == "moon_dew":
 		var low: Array = _allies(u)
 		low.sort_custom(func(a, b): return a.hp_ratio() < b.hp_ratio())
@@ -414,6 +416,9 @@ func _run_turn(u: Node) -> void:
 		u.atb = 100.5
 		_text(u.head_position() + Vector3.UP * 0.6, I18n.s("extra_turn"), Color(0.5, 1.0, 0.8), 60)
 		hud.log_line(I18n.s("log_extra", [_name(u)]))
+	if u.alive and u.passive_id == "seventeen":
+		u.element = Data.SHENG[u.element]
+		_text(u.head_position() + Vector3.UP * 0.2, I18n.element(u.element), Data.ELEMENT_COLORS[u.element], 46)
 	if u.alive and u.team == 1:
 		_plan_intent(u)
 	_finish_turn(u)
@@ -900,6 +905,7 @@ func _base_damage(c: Node, t: Node, sk: Dictionary, aff: int) -> float:
 			if t.hp_ratio() < 0.5:
 				d *= 1.4
 		"unmended":
+			d *= 1.0 + 0.06 * int(c.get_meta("rage", 0))
 			if c.hp_ratio() < 0.5:
 				d *= 1.3
 	if t.passive_id == "fired_shell" and t.hp_ratio() > 0.5:
@@ -970,6 +976,10 @@ func _break(c: Node, t: Node) -> void:
 		_sfx("shatter", -8.0)
 		_sfx("reaction", -4.0)
 		arena.pulse_element(c.element)
+	for g in _allies(t):
+		if g != t and g.passive_id == "sweet_white":
+			_shield(t, t.max_hp * 0.15)
+			break
 	# interrupt: a telegraphed skill or ultimate falls back to a basic attack
 	if t.team == 1 and intent_threat(t):
 		t.intent.skill = 0
@@ -981,7 +991,11 @@ func _break(c: Node, t: Node) -> void:
 				_shield(a, a.max_hp * 0.12)
 		Data.Element.WOOD:
 			for a in _allies(c):
-				_heal(a, a.max_hp * 0.08)
+				_heal(a, a.max_hp * 0.12)
+				for st in a.statuses:
+					if not Data.STATUS[st.id].buff:
+						a.statuses.erase(st)
+						break
 		Data.Element.WATER:
 			if not t.has_status("immunity"):
 				t.add_status("slow", 2)
@@ -1119,6 +1133,8 @@ func _try_debuff(c: Node, t: Node, status: String, turns: int, chance: float) ->
 	if rng.randf() * 100.0 < resist:
 		_text(t.head_position() + Vector3.UP * 0.3, I18n.s("resist"), Color(0.75, 0.8, 1.0), 40)
 		return
+	if c.passive_id == "verse":
+		turns += 1
 	t.add_status(status, turns)
 	var info: Dictionary = Data.STATUS[status]
 	_text(t.head_position() + Vector3.UP * 0.3, I18n.f(info, "name"), info.color, 40)

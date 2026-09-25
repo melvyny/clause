@@ -143,6 +143,7 @@ static func pv(points: Array) -> PackedVector2Array:
 const GLTF_HEIGHT := {
 	"chickencup": 2.0, "rulotus": 1.8, "sancaihorse": 2.1, "childpillow": 1.5,
 	"tigerpillow": 1.7, "generaljar": 2.4, "phoenixvase": 2.4, "yohenbowl": 2.0,
+	"changshaewer": 2.1, "cimu": 2.6, "monkcap": 2.0,
 }
 ## Animation name keywords (matched case-insensitively, first hit wins).
 const ANIM_KEYS := {
@@ -198,6 +199,12 @@ static func build(species_id: String, is_enemy: bool) -> Node3D:
 			_phoenix_vase(k)
 		"yohenbowl":
 			_yohen_bowl(k)
+		"changshaewer":
+			_changsha_ewer(k)
+		"cimu":
+			_cimu(k)
+		"monkcap":
+			_monk_cap(k)
 		"boss":
 			_boss(k)
 	return k.root
@@ -645,3 +652,131 @@ static func _find_player(n: Node) -> AnimationPlayer:
 		if r:
 			return r
 	return null
+
+
+# --- 长沙窑诗文壶 Changsha Poem Ewer: a melon-bellied Tang ewer with a poem on its side ------------
+static func _changsha_ewer(k: Kit) -> void:
+	var straw := Color(0.8, 0.74, 0.46)
+	var brown := Color(0.42, 0.24, 0.1)
+	var green := Color(0.3, 0.52, 0.26)
+	var glaze := {"glaze": straw, "all": 1.0, "body": straw, "pattern": 2, "glaze2": brown, "glaze3": green, "pscale": 2.5, "crack": 2.6}
+	var body := k.node(k.root, Vector3.ZERO)
+	k.bob(body, 0.05, 1.9)
+	# melon-lobed belly, short neck, trumpet mouth
+	var pot := k.node(body, Vector3(0, 0.1, 0))
+	M.add_mesh(pot, lathe(pv([[0.0, 0.0], [0.34, 0.0], [0.4, 0.06], [0.66, 0.35], [0.72, 0.62], [0.6, 0.95], [0.3, 1.12], [0.24, 1.3], [0.34, 1.52], [0.36, 1.56], [0.0, 1.56]]), 56, 8, 0.05), k.mat(glaze))
+	# the short polygonal spout (a projectile muzzle) and a strap handle
+	var spout := k.node(pot, Vector3(0.6, 0.82, -0.2), Vector3(0, 0, -55))
+	M.add_mesh(spout, M.cylinder(0.09, 0.12, 0.42, 8), k.mat(glaze), Vector3(0, 0.18, 0))
+	k.muzzle(spout, Vector3(0, 0.42, 0))
+	var handle := k.node(pot, Vector3(-0.55, 0.95, 0.2))
+	M.add_mesh(handle, M.torus(0.2, 0.28, 24), k.mat(glaze), Vector3.ZERO, Vector3(90, 0, 0), Vector3(1, 1, 1.3))
+	# brown splashes and the poem, written down its side
+	for i in 3:
+		var a := -0.9 + i * 0.9
+		M.add_mesh(pot, M.sphere(0.12, 12, 6), k.mat({"glaze": [brown, green, brown][i], "all": 1.0}), Vector3(sin(a) * 0.7, 0.45, cos(a) * -0.7 + 0.05), Vector3.ZERO, Vector3(1, 1.4, 0.2))
+	var poem := Label3D.new()
+	poem.text = "君\n生\n我\n未\n生"
+	poem.font = M.ui_font()
+	poem.font_size = 40
+	poem.pixel_size = 0.004
+	poem.modulate = brown
+	poem.outline_size = 0
+	poem.position = Vector3(-0.42, 0.6, -0.58)
+	poem.rotation_degrees = Vector3(0, -35, 0)
+	pot.add_child(poem)
+	k.eyes(pot, Vector3(0, 0.78, -0.72), 0.16, 0.1, "happy")
+	k.blush(pot, Vector3(0, 0.64, -0.74), 0.26, 0.06)
+	# a writing brush it holds like a staff
+	var arm := k.node(pot, Vector3(0.72, 0.45, -0.25), Vector3(0, 0, -25))
+	M.add_mesh(arm, M.capsule(0.08, 0.35), k.mat(glaze), Vector3(0, -0.1, 0))
+	var brush := k.node(arm, Vector3(0, -0.2, -0.1))
+	M.add_mesh(brush, M.cylinder(0.025, 0.025, 0.9), M.brass(Color(0.35, 0.22, 0.12), 0.6), Vector3(0, 0.3, 0))
+	M.add_mesh(brush, M.sphere(0.07), k.mat({"glaze": Color(0.08, 0.06, 0.05), "all": 1.0}), Vector3(0, 0.8, 0), Vector3.ZERO, Vector3(1, 1.8, 1))
+	k.bob(arm, 0.05, 1.6, 0.8)
+	var ink := M.particles(Color(0.25, 0.15, 0.08, 0.8), 12, 1.4, 0.08, 0.4, Vector3.UP, 40, Vector3(0, 0.3, 0), 0.3)
+	ink.position = Vector3(0, 1.6, 0)
+	pot.add_child(ink)
+	k.root.set_meta("parts", {"body": body, "pot": pot, "spout": spout, "arm": arm, "brush": brush})
+	k.root.set_meta("height", 1.85)
+	k.root.set_meta("radius", 0.85)
+
+
+# --- 瓷母 Mother of Porcelain: Qianlong's vase of seventeen glazes, band upon band --------------
+static func _cimu(k: Kit) -> void:
+	var body := k.node(k.root, Vector3.ZERO)
+	k.bob(body, 0.04, 1.2)
+	# the profile is split into bands, each fired in a different glaze
+	var prof := [[0.3, 0.0], [0.42, 0.08], [0.5, 0.22], [0.66, 0.5], [0.74, 0.78], [0.7, 1.02], [0.56, 1.26], [0.36, 1.5], [0.28, 1.72], [0.34, 1.94], [0.42, 2.06]]
+	# bottom to top: Jun flambé, cobalt, turquoise, celadon, famille-rose (the face band),
+	# imperial yellow, powder blue, tea-dust, Ru sky-blue, faux-bronze
+	var bands := [
+		{"glaze": Color(0.6, 0.1, 0.12), "all": 1.0, "pattern": 1, "glaze2": Color(0.45, 0.25, 0.65), "body": Color(0.6, 0.1, 0.12)},
+		{"glaze": Color(0.08, 0.2, 0.62), "all": 1.0, "body": Color(0.08, 0.2, 0.62)},
+		{"glaze": Color(0.18, 0.66, 0.66), "all": 1.0, "body": Color(0.18, 0.66, 0.66)},
+		{"glaze": Color(0.45, 0.66, 0.48), "all": 1.0, "pattern": 3, "pscale": 8.0, "body": Color(0.45, 0.66, 0.48)},
+		{"glaze": Color(0.98, 0.84, 0.86), "all": 1.0, "body": Color(0.98, 0.84, 0.86)},
+		{"glaze": Color(0.98, 0.8, 0.18), "all": 1.0, "body": Color(0.98, 0.8, 0.18)},
+		{"glaze": Color(0.2, 0.38, 0.75), "all": 1.0, "pattern": 6, "body": Color(0.2, 0.38, 0.75)},
+		{"glaze": Color(0.42, 0.42, 0.18), "all": 1.0, "body": Color(0.42, 0.42, 0.18)},
+		{"glaze": Color(0.6, 0.76, 0.8), "all": 1.0, "pattern": 3, "pscale": 6.0, "body": Color(0.6, 0.76, 0.8)},
+		{"glaze": Color(0.45, 0.28, 0.12), "all": 1.0, "body": Color(0.45, 0.28, 0.12)},
+	]
+	var vase := k.node(body, Vector3(0, 0.05, 0))
+	for i in prof.size() - 1:
+		M.add_mesh(vase, lathe(pv([prof[i], prof[i + 1]]), 56), k.mat(bands[i % bands.size()]))
+		# a thin gold line between bands
+		M.add_mesh(vase, M.torus(float(prof[i + 1][0]) - 0.01, float(prof[i + 1][0]) + 0.02, 48), M.brass(Color(1.0, 0.8, 0.35), 0.25), Vector3(0, float(prof[i + 1][1]), 0))
+	M.add_mesh(vase, M.cylinder(0.0, 0.42, 0.02, 40), k.mat({"glaze": Color(0.1, 0.06, 0.05), "all": 1.0}), Vector3(0, 2.06, 0))
+	# a revolving band of glaze (the 转心 trick) around her waist
+	var ring := k.node(vase, Vector3(0, 0.9, 0))
+	M.add_mesh(ring, M.torus(0.78, 0.86, 64), k.mat({"glaze": Color(0.95, 0.8, 0.3), "all": 1.0, "pattern": 7, "glaze2": Color(0.8, 0.2, 0.2), "glaze3": Color(0.2, 0.5, 0.8)}))
+	k.spin(ring, Vector3.UP, 35.0)
+	# gilded dragon-loop handles
+	for side in [-1.0, 1.0]:
+		var h := k.node(vase, Vector3(side * 0.42, 1.62, 0))
+		M.add_mesh(h, M.torus(0.1, 0.15, 20), M.brass(Color(1.0, 0.78, 0.3), 0.25), Vector3.ZERO, Vector3(0, 0, 90))
+		k.bob(h, 0.03, 2.0, side)
+	k.eyes(vase, Vector3(0, 1.28, -0.58), 0.15, 0.09, "happy")
+	k.blush(vase, Vector3(0, 1.17, -0.62), 0.26, 0.06)
+	k.muzzle(vase, Vector3(0, 2.1, 0))
+	var sparkle := M.particles(Color(1.0, 0.85, 0.45, 0.9), 20, 1.6, 0.08, 0.4, Vector3.UP, 180, Vector3(0, 0.2, 0), 0.9)
+	sparkle.position = Vector3(0, 1.0, 0)
+	vase.add_child(sparkle)
+	k.root.set_meta("parts", {"body": body, "vase": vase, "ring": ring})
+	k.root.set_meta("height", 2.25)
+	k.root.set_meta("radius", 0.9)
+
+
+# --- 甜白僧帽壶 Sweet-White Monk's Cap: a sugar-white Yongle ewer with a monk's-cap rim ------------
+static func _monk_cap(k: Kit) -> void:
+	var sweet := Color(0.98, 0.97, 0.92)
+	var white := {"glaze": sweet, "all": 1.0, "body": sweet, "crack": 2.4, "gloss": 0.05}
+	var body := k.node(k.root, Vector3.ZERO)
+	k.bob(body, 0.04, 1.4)
+	var pot := k.node(body, Vector3(0, 0.08, 0))
+	M.add_mesh(pot, lathe(pv([[0.0, 0.0], [0.38, 0.0], [0.44, 0.06], [0.6, 0.3], [0.64, 0.62], [0.54, 0.86], [0.36, 1.0], [0.3, 1.12], [0.0, 1.12]]), 56), k.mat(white))
+	# the monk's cap: a stepped, petal-edged rim rising at the back
+	var cap := k.node(pot, Vector3(0, 1.1, 0))
+	k.bob(cap, 0.02, 2.2)
+	M.add_mesh(cap, lathe(pv([[0.0, 0.0], [0.36, 0.0], [0.42, 0.1], [0.36, 0.16], [0.0, 0.16]]), 48, 6, 0.08), k.mat(white))
+	M.add_mesh(cap, M.prism(Vector3(0.5, 0.36, 0.08)), k.mat(white), Vector3(0, 0.3, 0.22), Vector3(-10, 0, 0))
+	# the flat duck-bill spout at the front
+	M.add_mesh(cap, M.prism(Vector3(0.22, 0.46, 0.05)), k.mat(white), Vector3(0, 0.12, -0.46), Vector3(-80, 0, 0))
+	# a strap handle and a small gold shield that orbits it
+	M.add_mesh(pot, M.torus(0.18, 0.25, 24), k.mat(white), Vector3(0, 0.78, 0.6), Vector3(0, 90, 0), Vector3(1, 1.4, 1))
+	var orbit := k.node(pot, Vector3(0, 0.55, 0))
+	k.spin(orbit, Vector3.UP, 60.0)
+	var disc := k.node(orbit, Vector3(0.95, 0, 0), Vector3(0, 0, 90))
+	M.add_mesh(disc, M.cylinder(0.2, 0.2, 0.03, 32), M.glow(Color(1.0, 0.78, 0.3), 1.2))
+	M.add_mesh(disc, M.torus(0.17, 0.21, 32), M.glow(Color(1.0, 0.85, 0.4), 2.0), Vector3(0, 0.02, 0))
+	k.eyes(pot, Vector3(0, 0.66, -0.66), 0.17, 0.09, "sleepy")
+	k.blush(pot, Vector3(0, 0.54, -0.66), 0.28, 0.06)
+	for side in [-1.0, 1.0]:
+		var hand := k.node(pot, Vector3(side * 0.66, 0.45, -0.15), Vector3(0, 0, side * -25))
+		M.add_mesh(hand, M.capsule(0.08, 0.3), k.mat(white), Vector3(0, -0.08, 0))
+		k.bob(hand, 0.04, 1.4, side)
+	k.muzzle(cap, Vector3(0, 0.12, -0.7))
+	k.root.set_meta("parts", {"body": body, "pot": pot, "cap": cap, "orbit": orbit})
+	k.root.set_meta("height", 1.75)
+	k.root.set_meta("radius", 0.8)

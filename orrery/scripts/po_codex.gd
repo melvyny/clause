@@ -1,6 +1,6 @@
 extends Node3D
 ## Goldmend :: Vessel Spirit codex (器灵图鉴).
-## All spirits stand on their plinths in two rows, like a museum display.
+## All spirits stand on their plinths in rows of four, like a museum display.
 ## Clicking one selects it; the game shows its real-world origin and lore.
 
 const Data = preload("po_data.gd")
@@ -16,6 +16,7 @@ var cam: Camera3D
 var _units: Array = []
 var _time := 0.0
 var _focus := -1
+var still := false          # screenshots: keep the focused spirit facing the camera
 
 
 func _ready() -> void:
@@ -30,10 +31,11 @@ func _ready() -> void:
 	for i in ids.size():
 		var row := i / 4
 		var col := i % 4
+		var in_row := mini(4, ids.size() - row * 4)
 		var u := Unit.new()
 		u.setup(ids[i], 0, 1, Data.compute_stats(ids[i], 1))
 		add_child(u)
-		u.position = Vector3(-6.2 + col * 3.0, 0, -1.4 + row * 3.4)
+		u.position = Vector3((col - (in_row - 1) * 0.5) * 3.5, 0, -3.8 + row * 3.6)
 		u.rotation.y = 0.0
 		u.look_at(u.global_position + Vector3(0, 0, 1), Vector3.UP)
 		_units.append(u)
@@ -50,14 +52,14 @@ func _ready() -> void:
 		l.no_depth_test = true
 		l.position = u.position + Vector3(0, 0.15, 1.35)
 		add_child(l)
-	cam.set_view(Vector3(-1.6, 5.2, 9.6), Vector3(-1.6, 0.9, 0.4), 2.0, true)
+	cam.set_view(Vector3(0, 8.6, 13.6), Vector3(0, 0.6, 0.0), 2.0, true)
 
 
 func _process(delta: float) -> void:
 	_time += delta
 	for i in _units.size():
 		var u: Node3D = _units[i]
-		var target := PI + (sin(_time * 0.6 + i) * 0.35 if i != _focus else _time * 0.8)
+		var target := PI + (sin(_time * 0.6 + i) * 0.35 if i != _focus else (0.0 if still else _time * 0.8))
 		u.rotation.y = lerp_angle(u.rotation.y, target, minf(1.0, delta * 3.0))
 
 

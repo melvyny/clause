@@ -34,14 +34,17 @@ A playable **one-run vertical slice** (~15–20 min) of a roguelite monster-coll
 
 | 器灵 Spirit | 原型文物 Real piece | 五行 | 胎厚 Tough | 羁绊 Traits | 定位 Role |
 |---|---|---|---|---|---|
-| 鸡缸杯 Chicken Cup | 明·成化斗彩鸡缸杯 · Ming Chenghua doucai cup | 火 Fire | 90 | 大明 · 彩绘 | 输出 Striker |
+| 鸡缸杯 Chicken Cup | 明·成化斗彩鸡缸杯 · Ming Chenghua doucai cup | 火 Fire | 100 | 大明 · 彩绘 | 输出 Striker |
 | 虎枕 Tiger Pillow | 宋金·磁州窑虎形枕 · Cizhou tiger pillow | 火 Fire | 120 | 宋韵 · 彩绘 | 斗士 Bruiser |
 | 汝窑莲碗 Ru Lotus Bowl | 北宋·汝窑天青釉莲花式温碗 · Ru ware lotus bowl | 水 Water | 100 | 宋韵 · 单色釉 | 辅助 Support |
 | 将军罐 General Jar | 清·康熙青花将军罐 · Kangxi blue-and-white jar | 水 Water | 150 | 康乾 · 彩绘 | 坦克 Tank |
 | 三彩马 Sancai Steed | 唐·三彩马 · Tang sancai horse | 土 Earth | 95 | 盛唐 · 彩绘 | 控速 Tempo |
-| 凤耳瓶 Phoenix Vase | 南宋·龙泉窑青釉凤耳瓶 · Longquan celadon vase | 木 Wood | 80 | 宋韵 · 单色釉 | 刺客 Assassin |
+| 凤耳瓶 Phoenix Vase | 南宋·龙泉窑青釉凤耳瓶 · Longquan celadon vase | 木 Wood | 95 | 宋韵 · 单色釉 | 刺客 Assassin |
 | 孩儿枕 Child Pillow | 北宋·定窑白釉孩儿枕 · Ding ware child pillow | 金 Metal | 100 | 宋韵 · 单色釉 | 治疗 Healer |
 | 曜变盏 Yohen Bowl | 南宋·建窑曜变天目盏 · Jian "yohen" tea bowl | 金 Metal | 90 | 宋韵 · 单色釉 | 法师 Caster |
+| 长沙窑诗文壶 Changsha Poem Ewer | 唐·长沙窑青釉褐彩诗文执壶 · Changsha ewer with a painted poem | 木 Wood | 90 | 盛唐 · 彩绘 | 诗人 Poet（减益多 1 回合 · debuffs last longer） |
+| 瓷母 Mother of Porcelain | 清·乾隆各种釉彩大瓶 · Qianlong vase of seventeen glazes | 土→金→水→木→火 轮转 · cycles | 110 | 康乾 · 彩绘 | 法师 Caster（每次行动后元素沿相生转一格 · element turns after each action） |
+| 甜白僧帽壶 Sweet-White Monk's Cap | 明·永乐甜白釉僧帽壶 · Yongle sweet-white monk's-cap ewer | 金 Metal | 130 | 大明 · 单色釉 | 守护 Guardian（队友崩裂时给护盾 · shields a breaking ally） |
 
 每只器灵有 **4 个器艺**（强化），名字都是它身上的真实工艺：鸡缸杯的「开光」「铜红」、汝窑的「蟹爪纹」「满釉支烧」、凤耳瓶的「薄胎」「粉青」……
 *Each spirit has **4 craft techniques** (upgrades) named after real techniques on that piece.*
