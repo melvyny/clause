@@ -1,71 +1,85 @@
-# 瓷星召唤 Porcelain Orrery
+# 金缮 GOLDMEND
 
-一个用 **Godot 4.3+** 做的 3D 回合制怪兽对战原型（类魔灵召唤），4v4，零外部素材：所有模型、材质、特效、音效都在运行时由代码生成。
+> 碎了，就用金子补起来。 · *When it breaks, mend it with gold.*
 
-![battle](docs/screenshot_battle.png)
+一款 roguelite 怪物收集战斗游戏的**可玩样本（一局约 15–20 分钟）**，用 **Godot 4.3+** 制作，支持**中文 / English** 一键切换。
+A playable **one-run vertical slice** (~15–20 min) of a roguelite monster-collecting battler, built in **Godot 4.3+**, fully bilingual (**中文 / English**).
 
-## 运行
+![title](docs/title_en.png)
 
-1. 安装 Godot 4.3 或更新版本（标准版，不需要 .NET）。
-2. 用 Godot 打开本目录的 `project.godot`，按 **F5**。
-3. 如果要放进你已有的项目：只复制 `orrery/` 文件夹，然后打开 `res://orrery/scenes/po_main.tscn` 按 **F6**。不要复制 `project.godot`。
-
-## 画风：瓷偶 × 星仪
-
-- 角色是**上釉的瓷偶机关兽**，每个元素对应一种釉色：火是郎窑红，水是青花钴蓝，风是青瓷，光是象牙金，暗是天目黑釉。
-- 身上有**金缮（kintsugi）金色裂纹**。**血越少，裂纹越宽、越亮**，从裂缝里透出元素光。死亡时整只**碎成瓷片**，并散出金粉。
-- 战场是漂浮在星云中的**黄铜星仪**：金缮大理石圆台，外面有巨大的旋转浑天环，五颗元素行星绕着转。
-- 着色器都在 `orrery/shaders/`：瓷器与金缮、描边、星云天空。
-
-## 战斗系统
-
-| 系统 | 说明 |
+| 青花瓷盘地图 · Plate map | 金缮修补 · Gold mending |
 |---|---|
-| **ATB 攻击条** | 连续时钟：每 tick 攻击条增加 速度×7%，先满 100% 的单位行动；同时满条时速度高者先动 |
-| **行动预测** | 顶部显示接下来 8 个行动者（按当前攻击条模拟）|
-| **属性克制** | 火→风→水→火，光⇄暗。克制：伤害 +30%、暴击率 +15%、40% 概率碾压；被克：伤害 -15%、30% 概率偏斜（偏斜时无法附加减益）|
-| **元素裂变** | 伤害技能会在目标身上留下施法者的元素印记；用**不同元素**打有印记的目标，会触发 6 种反应：焰暴（溅射）、蒸腾（削攻击条）、冰封、湮灭、辉光（治疗）、蚀裂（破防+持续伤害）|
-| **灵力奥义** | 第 3 技能不看冷却，靠灵力：行动 +25、受击 +8、击杀 +15，满 100 可放 |
-| **技能** | 每只 3 个技能 + 1 个被动 + 队长技（1 号位生效）|
-| **增益/减益** | 攻击强化 +50%、防御强化 +70%、免疫；防御破坏 -70%、持续伤害（每回合 5%）、眩晕、冰冻 |
-| **命中/抵抗** | 实际抵抗率 = max(15%, 目标抵抗 - 施法者命中)。瞄准时会显示实际命中率和预计伤害 |
+| ![map](docs/map_zh.png) | ![mend](docs/mend_zh.png) |
+| **战斗 · Battle** | **釉片奖励 · Glaze shards** |
+| ![battle](docs/battle_en.png) | ![reward](docs/reward_en.png) |
 
-### 角色（全部原创，共 8 只）
+## 运行 · Run
 
-| 角色 | 元素 | 定位 | 特点 |
-|---|---|---|---|
-| 焰釉猞猁 Ember Lynx | 火 | 输出 | 持续伤害，对灼烧目标增伤 |
-| 潮光瓷蛾 Tide Moth | 水 | 辅助 | 群体治疗、净化、全队拉条 |
-| 风铃角羊 Chime Ram | 风 | 控速 | 全队拉条，概率获得额外回合 |
-| 月白鸮 Lumen Owl | 光 | 治疗 | 治疗、免疫、自我净化 |
-| 窑心熊 Kiln Bear | 火 | 斗士 | 胸口是窑炉，受击时涨攻击条 |
-| 青花盾龟 Cobalt Shell | 水 | 坦克 | 高血量时减伤，冰冻控制 |
-| 青瓷螳 Celadon Mantis | 风 | 刺客 | 对残血目标增伤 |
-| 天目釉蛇 Tenmoku Serpent | 暗 | 法师 | 击杀后获得额外回合 |
+1. 安装 Godot 4.3 或更新版本（标准版即可）。Install Godot 4.3+ (standard build).
+2. 用 Godot 打开 `project.godot`，按 **F5**。Open `project.godot` and press **F5**.
+3. 在标题页或地图右上角切换语言。Switch language on the title screen or at the top-right of the map.
 
-## 操作
+## 世界观 · Story
 
-- **点击敌人**或**点击头像**选择目标。**1 / 2 / 3** 切换技能。**空格**让 AI 替你选目标。群体技能再按一次技能键即可释放。
-- 目标头顶的箭头：**绿▲克制**，**黄◆无克制**，**红▼被克**。
-- 右上角可以切换**自动战斗**、**1x/2x/3x 倍速**，查看**裂变表**，打开**符文盘（R）**。
-- **F1 或 ~ 键**打开开发者控制台，功能有：瞬间获胜、击杀全部敌人、无限冷却加满灵力、我方满攻击条、倍速、自动战斗、回满血、刷传说符文、加召唤卷轴、重置存档。
+星空是一只巨大的青花瓷盘。它碎过一次，被人用金子补好，金线就是星轨。如今，没被补好的碎片聚成了「无缮之王」。你是缮星师：带上你的瓷偶，沿着裂痕走到盘心。
 
-## 养成循环
+*The night sky is a great blue-and-white plate. It broke once and was mended with gold; the gold seams became the star paths. The pieces that were never mended have gathered into **The Unmended**. You are a Mender: take your porcelain figures and follow the cracks to the heart of the plate.*
 
-- **6 槽符文盘**：套装效果有猛攻 4 件（攻击 +35%）、活力 2 件（生命 +15%）、迅速 4 件（速度 +25%）、守护 2 件（防御 +15%）、刃 2 件（暴击率 +12%）。
-- **胜利结算**：获得经验和升级、1–2 个符文，有概率获得召唤卷轴，之后进入下一层。每 5 层有一场首领战。
-- **召唤卷轴**：随机召唤新角色，可以在符文盘里把它编入队伍。
-- 存档位置：`user://porcelain_orrery_save.json`。
+## 核心卖点 · Core hook
 
-## 工程隔离
+**碎裂与金缮 · Shatter & Mend**
+- 瓷偶在战斗中阵亡会**碎裂**，它的血量和状态在整局中一直保留。*Figures that fall **shatter**; HP carries over between fights.*
+- 在**金缮坊**花金子修补：每修一次**永久多一道发光的金缝**，生命、攻击、防御各 +12%，并按**碎裂的原因**获得伤痕特性（被火打碎得"耐火纹"，被暴击打碎得"韧胎"……）。*Mend them at a **Mending Hall**: each repair adds a permanent glowing gold seam (+12% HP/ATK/DEF) and a **scar trait based on how it broke**.*
+- 金缝最多 3 道，**第 4 次碎裂就会化为瓷尘，永远离开**。*The 4th break turns it to dust, gone for good.*
 
-- 所有内容都在 `orrery/` 下，脚本前缀是 `po_`。
-- **不使用 `class_name`**：脚本之间通过 `preload()` 常量引用，不会往全局类名空间里加东西（相当于命名空间隔离）。
-- 不修改 Input Map、Physics Layers、Autoload、音频总线或渲染设置。环境光和天空是场景内的 `WorldEnvironment`。
+## 一局流程 · A run
 
-## 自动测试 / 截图
+标题 → 选起始三人组 → 在**青花瓷盘**上走 8 层（走过的路会被金缮成金线）→ 首领「无缮之王」。
+Title → choose a starting trio → travel 8 floors across the **porcelain plate** (your path is gilded as you go) → The Unmended.
+
+| 节点 Node | 内容 Content |
+|---|---|
+| 战 Battle / 精 Elite | 4v4 以内的攻击条战斗；胜利得金子，并从 3 块釉片中选 1。*ATB battles; win gold and pick 1 of 3 glaze shards* |
+| 窑 Kiln | 招募新瓷偶（最多 4 只）。*Recruit a new figure (team of up to 4)* |
+| 缮 Mending Hall | 金缮修补碎裂的瓷偶，或全队休整。*Mend shattered figures or rest* |
+| 市 Shop | 购买釉片、修复釉浆。*Buy glaze shards, repair slip* |
+| 奇 Encounter | 3 个带选择的事件。*3 choice events* |
+| 王 Boss | 无缮之王：场上有单位碎裂时它会变强。*The Unmended grows stronger whenever anything shatters* |
+
+## 战斗 · Combat
+
+- **攻击条 ATB**：每 tick 攻击条增加 速度×7%，先满者行动；顶部显示接下来 8 个行动者。*SPD-driven Attack Bar with an 8-turn forecast.*
+- **属性克制 Elements**：火→风→水→火，光⇄暗。*Fire→Wind→Water→Fire, Light⇄Dark.*
+- **元素裂变 Element Fission**：伤害会留下元素印记，用另一种元素命中带印记的目标会触发 6 种反应：焰暴、蒸腾、冰封、湮灭、辉光、蚀裂。*Marks + 6 reactions (Firestorm, Steam, Frostbind, Annihilation, Radiance, Corrosion).*
+- **奥义 Ultimates**：靠灵力充能（行动 +25、受击 +8、击杀 +15）。*Charged by energy.*
+- **信息透明**：瞄准时显示预计伤害、能否击杀、实际命中率、将触发的裂变。*Targeting previews damage, lethal, landing chance and reactions.*
+- **15 块釉片**：改写规则，而不只是加数值，比如「双印：裂变后保留印记，可以连锁」「碎瓷锋：队友碎裂时全队拉条并强化」。*Rule-bending relics, e.g. chain reactions, rally on shatter.*
+
+## 美术 · Art direction
+
+**青花瓷 × 金缮 × 星空。** 所有模型、材质、特效、音效都在运行时由代码生成，没有任何外部素材。
+**Blue-and-white porcelain × kintsugi × night sky.** Every model, material, effect and sound is generated at runtime; no imported assets.
+- 瓷器着色器 `po_porcelain.gdshader`：元素釉色浸釉，加金缮裂纹。**血越少裂纹越亮**，修补次数越多金缝越粗越亮。*Glaze dip + kintsugi seams that glow as HP drops and thicken with each repair.*
+- 青花盘着色器 `po_plate.gdshader`：海水纹、云纹、莲瓣盘心，盘面本身也带金缮。*Sea-wave band, cloud scrolls, lotus medallion, gilded cracks.*
+- 角色站在瓷器底座上，像摆件一样；死亡时碎成瓷片，修补时碎片飞回原位。*Figurines on glazed plinths; they shatter into shards and reassemble when mended.*
+
+## 操作 · Controls
+
+| 操作 Action | 按键 Key |
+|---|---|
+| 选目标 Target | 点击敌人 / 头像 · click enemy or portrait |
+| 切换技能 Switch skill | **1 / 2 / 3** |
+| 自动选目标 Auto-target | **空格 Space** |
+| 自动战斗 / 倍速 Auto / Speed | 右上角按钮 · top-right buttons |
+| 开发者控制台 Dev console | **F1** 或 **~** |
+
+## 工程 · Project
+
+- 代码全部在 `orrery/` 下（脚本前缀 `po_`），**不使用 `class_name`**，不修改 Input Map、Physics Layers、Autoload 或渲染设置。*All code under `orrery/`, no global class names or project-setting changes.*
+- 文字：界面文字在 `po_i18n.gd` 的 `UI` 表；数据文字是 `po_data.gd` 里的 `name` / `name_en` 等双字段。*UI strings in `po_i18n.gd`; data texts carry `*_en` twins in `po_data.gd`.*
+- 可选：把 glTF 模型放进 `orrery/models/` 替换程序化模型（见该目录 README）。*Optional glTF drop-in models, see `orrery/models/README.md`.*
 
 ```bash
-godot --headless --path . -- --po-autotest                          # AI 对打 3 场后退出
-godot --path . -- --po-screenshot=shot.png --po-shot-delay=6         # 截图后退出
+godot --headless --path . -- --gm-autotest                       # AI 自动打完一整局 · AI plays a full run
+godot --path . -- --gm-demo=map --gm-shot=map.png --gm-lang=en   # 截图 · screenshot (title|map|battle|mend|reward|end)
 ```

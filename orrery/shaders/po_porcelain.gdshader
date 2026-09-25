@@ -16,6 +16,7 @@ uniform vec4 core_color : source_color = vec4(1.0, 0.5, 0.2, 1.0);
 uniform float crack_scale = 3.2;
 uniform float crack_width = 0.035;
 uniform float damage = 0.0;
+uniform float mended = 0.0; // times this creature has been mended: permanent, brighter gold seams
 uniform vec4 rim_color : source_color = vec4(0.7, 0.8, 1.0, 1.0);
 uniform float rim_strength = 0.35;
 uniform vec4 emission_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
@@ -59,7 +60,7 @@ void fragment() {
 	vec3 col = mix(porcelain.rgb, glaze_col, g);
 
 	vec2 v = voronoi(lp * crack_scale + vec3(3.1, 7.7, 1.3));
-	float w = crack_width * (1.0 + damage * 1.6);
+	float w = crack_width * (1.0 + damage * 1.6 + mended * 0.9);
 	float seam = 1.0 - smoothstep(0.0, w, v.y - v.x);
 
 	ALBEDO = mix(col, gold.rgb, seam);
@@ -72,7 +73,7 @@ void fragment() {
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
 	float pulse = 0.75 + 0.25 * sin(TIME * 6.0);
 	EMISSION = rim_color.rgb * fres * rim_strength
-		+ gold.rgb * seam * 0.18
+		+ gold.rgb * seam * (0.18 + mended * 0.55)
 		+ core_color.rgb * seam * damage * damage * 5.0 * pulse
 		+ emission_color.rgb * emission_energy;
 }

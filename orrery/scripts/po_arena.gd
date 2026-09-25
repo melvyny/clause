@@ -1,5 +1,5 @@
 extends Node3D
-## Porcelain Orrery :: the battlefield.
+## Goldmend :: the battlefield.
 ## A kintsugi-marble dais floating inside a giant brass armillary sphere, with
 ## the five element planets orbiting it, drifting porcelain shards, and a
 ## nebula sky. Only creates nodes under itself; the WorldEnvironment is local
@@ -15,7 +15,7 @@ var _time := 0.0
 
 
 func _ready() -> void:
-	_environment()
+	make_environment(self)
 	_dais()
 	_armillary()
 	_planets_ring()
@@ -38,7 +38,8 @@ func pulse_element(element: int) -> void:
 			t.tween_property(mi, "scale", Vector3.ONE, 0.5)
 
 
-func _environment() -> void:
+## Nebula sky, fog, glow and the key/rim lights. Shared by battle and map scenes.
+static func make_environment(parent: Node) -> void:
 	var env := Environment.new()
 	var sky := Sky.new()
 	var sky_mat := ShaderMaterial.new()
@@ -65,7 +66,7 @@ func _environment() -> void:
 	env.adjustment_contrast = 1.05
 	var we := WorldEnvironment.new()
 	we.environment = env
-	add_child(we)
+	parent.add_child(we)
 
 	var key := DirectionalLight3D.new()
 	key.light_color = Color(1.0, 0.9, 0.8)
@@ -73,12 +74,12 @@ func _environment() -> void:
 	key.rotation_degrees = Vector3(-52, 35, 0)
 	key.shadow_enabled = true
 	key.directional_shadow_max_distance = 60.0
-	add_child(key)
+	parent.add_child(key)
 	var rim := DirectionalLight3D.new()
 	rim.light_color = Color(0.55, 0.45, 1.0)
 	rim.light_energy = 0.7
 	rim.rotation_degrees = Vector3(-20, 200, 0)
-	add_child(rim)
+	parent.add_child(rim)
 
 
 func _dais() -> void:

@@ -6,6 +6,7 @@ extends Node3D
 const Data = preload("po_data.gd")
 const M = preload("po_mat.gd")
 const Builder = preload("po_monster_builder.gd")
+const I18n = preload("po_i18n.gd")
 
 var species_id := ""
 var species: Dictionary = {}
@@ -22,9 +23,15 @@ var statuses: Array = []     # [{id, turns}]
 var alive := true
 var skills: Array = []
 var energy := 0.0
+var ult_cost := 100.0
 var mark := -1               # element Mark left by the last attacker (Element Fission)
 var mark_turns := 0
 var is_boss := false
+var uid := -1                # run creature id (allies only)
+var mends := 0               # gold seams from previous repairs
+var scars: Array = []        # scar ids (see Data.SCARS)
+var death_cause := {}        # how it broke: {element, crit, dot, cc}
+const PLINTH_H := 0.2
 var passive_id := ""
 var home := Vector3.ZERO
 var home_basis := Basis.IDENTITY
@@ -48,8 +55,8 @@ var _shown_damage := 0.0
 
 func setup(p_species: String, p_team: int, p_level: int, p_stats: Dictionary, name_prefix: String = "") -> void:
 	species_id = p_species
-	species = Data.SPECIES[p_species]
-	display_name = (name_prefix + species.name).strip_edges()
+	species = Data.species_info(p_species)
+	display_name = (name_prefix + I18n.f(species, "name")).strip_edges()
 	element = species.element
 	team = p_team
 	level = p_level
@@ -64,17 +71,22 @@ func setup(p_species: String, p_team: int, p_level: int, p_stats: Dictionary, na
 
 func _ready() -> void:
 	model = Builder.build(species_id, team == 1)
-	add_child(model)
-	model_height = model.get_meta("height", 2.0)
+	# every figure stands on a glazed porcelain plinth, like a display piece
+	var stand := Node3D.new()
+	stand.position.y = PLINTH_H
+	add_child(stand)
+	stand.add_child(model)
+	model_height = model.get_meta("height", 2.0) + PLINTH_H
 	pick_radius = model.get_meta("radius", 0.8)
 	muzzle = model.get_meta("muzzle") if model.has_meta("muzzle") else null
 	if is_boss:
 		model.scale = Vector3.ONE * 1.35
-		model_height *= 1.35
+		model_height = (model_height - PLINTH_H) * 1.35 + PLINTH_H
 		pick_radius *= 1.3
 	for entry in model.get_meta("bobbers"):
 		_base_positions[entry[0]] = entry[0].position
 	_porcelain = model.get_meta("porcelain", [])
+	set_mends(mends)
 	play_anim("idle")
 	_collect_meshes(model)
 	_flash_mat = StandardMaterial3D.new()
@@ -95,12 +107,14 @@ func _ready() -> void:
 	body.add_child(shape)
 	add_child(body)
 
-	# Element base disc.
+	# Porcelain plinth glazed in the element colour, with a gold lip.
 	var ecol: Color = Data.ELEMENT_COLORS[element]
-	M.add_mesh(self, M.cylinder(pick_radius + 0.25, pick_radius + 0.25, 0.02, 40),
-		M.glow(ecol, 1.2, 0.25), Vector3(0, 0.02, 0))
-	M.add_mesh(self, M.torus(pick_radius + 0.22, pick_radius + 0.3), M.glow(ecol, 2.5, 0.8), Vector3(0, 0.03, 0))
-	_active_ring = M.add_mesh(self, M.torus(pick_radius + 0.4, pick_radius + 0.5), M.glow(Color(1.0, 0.85, 0.35), 4.0), Vector3(0, 0.05, 0))
+	var pr := pick_radius + 0.25
+	var plinth_mat := M.porcelain(Builder.GLAZES[element], 0.05, ecol, 0.0, 2.5, 0.012)
+	M.add_mesh(self, M.cylinder(pr, pr + 0.1, PLINTH_H, 40), plinth_mat, Vector3(0, PLINTH_H * 0.5, 0))
+	M.add_mesh(self, M.torus(pr - 0.05, pr + 0.02, 64), M.brass(), Vector3(0, PLINTH_H, 0))
+	M.add_mesh(self, M.torus(pr + 0.1, pr + 0.16), M.glow(ecol, 2.5, 0.8), Vector3(0, 0.03, 0))
+	_active_ring = M.add_mesh(self, M.torus(pick_radius + 0.45, pick_radius + 0.55), M.glow(Color(1.0, 0.85, 0.35), 4.0), Vector3(0, 0.05, 0))
 	_active_ring.visible = false
 	_target_ring = M.add_mesh(self, M.torus(pick_radius + 0.55, pick_radius + 0.68, 6), M.glow(Color(1, 1, 1), 3.0), Vector3(0, 0.06, 0))
 	_target_ring.visible = false
@@ -166,6 +180,16 @@ func play_anim(role: String) -> bool:
 	if role != "idle" and role != "death" and map.has("idle"):
 		ap.queue(map["idle"])
 	return true
+
+
+func set_mends(n: int) -> void:
+	mends = n
+	for m in _porcelain:
+		m.set_shader_parameter("mended", float(n))
+
+
+func has_scar(id: String) -> bool:
+	return id in scars
 
 
 # --- Stats ------------------------------------------------------------------------
@@ -250,7 +274,7 @@ func gain_energy(amount: float) -> void:
 
 
 func ultimate_ready() -> bool:
-	return energy >= 100.0
+	return energy >= ult_cost
 
 
 # --- Visual state -----------------------------------------------------------------

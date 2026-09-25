@@ -1,21 +1,18 @@
 extends CanvasLayer
-## Porcelain Orrery :: battle HUD.
+## Goldmend :: battle HUD (bilingual).
 ## Everything is built in code: nameplates that follow units, turn-order
 ## forecast, skill bar with damage preview, team portraits, combat log,
 ## Element Fission legend, result screen and the Rune Board.
 
 const Data = preload("po_data.gd")
 const M = preload("po_mat.gd")
+const I18n = preload("po_i18n.gd")
 
 signal skill_pressed(index: int)
 signal portrait_pressed(unit: Node)
 signal auto_toggled
 signal speed_pressed
-signal runes_pressed
 signal console_pressed
-signal next_pressed
-signal retry_pressed
-signal rune_board_closed
 
 const BRASS := Color(0.9, 0.7, 0.38)
 const IVORY := Color(0.96, 0.94, 0.88)
@@ -42,19 +39,7 @@ var _wave_label: Label
 var _auto_btn: Button
 var _speed_btn: Button
 var _legend: PanelContainer
-var _result: PanelContainer
-var _result_title: Label
-var _result_body: RichTextLabel
-var _board: PanelContainer
-var _profile
-var _board_mon := -1
-var _board_slot := -1
-var _roster_list: ItemList
-var _inv_list: ItemList
-var _inv_uids: Array = []
-var _slot_buttons: Array = []
-var _mon_info: RichTextLabel
-var _summon_btn: Button
+var _relic_label: RichTextLabel
 
 
 func _ready() -> void:
@@ -62,14 +47,12 @@ func _ready() -> void:
 	root = Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.theme = _make_theme()
+	root.theme = make_theme()
 	add_child(root)
 	_build_top()
 	_build_bottom()
 	_build_center()
 	_build_legend()
-	_build_result()
-	_build_board()
 	_no_focus(root)
 
 
@@ -94,7 +77,7 @@ static func _sb(bg: Color, border: Color, bw: int = 2, radius: int = 8, pad: int
 	return s
 
 
-func _make_theme() -> Theme:
+static func make_theme() -> Theme:
 	var t := Theme.new()
 	t.default_font = M.ui_font()
 	t.default_font_size = 16
@@ -167,9 +150,16 @@ func _build_top() -> void:
 
 	var title_box := VBoxContainer.new()
 	title_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title_box.add_child(_label("瓷星召唤  PORCELAIN ORRERY", 20, BRASS))
+	title_box.add_child(_label(I18n.s("title_small"), 20, BRASS))
 	_wave_label = _label("", 15)
 	title_box.add_child(_wave_label)
+	_relic_label = RichTextLabel.new()
+	_relic_label.bbcode_enabled = true
+	_relic_label.fit_content = true
+	_relic_label.custom_minimum_size = Vector2(380, 0)
+	_relic_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_relic_label.add_theme_font_size_override("normal_font_size", 13)
+	title_box.add_child(_relic_label)
 	top.add_child(title_box)
 
 	var spacer := Control.new()
@@ -182,7 +172,7 @@ func _build_top() -> void:
 	var ob := HBoxContainer.new()
 	ob.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ob.add_theme_constant_override("separation", 6)
-	ob.add_child(_label("行动预测 ▸", 14, BRASS))
+	ob.add_child(_label(I18n.s("turn_order"), 14, BRASS))
 	_order_row = HBoxContainer.new()
 	_order_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_order_row.add_theme_constant_override("separation", 4)
@@ -199,22 +189,19 @@ func _build_top() -> void:
 	btns.add_theme_constant_override("separation", 6)
 	btns.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_auto_btn = Button.new()
-	_auto_btn.text = "自动 AUTO"
+	_auto_btn.text = I18n.s("auto")
 	_auto_btn.toggle_mode = true
 	_auto_btn.pressed.connect(func(): auto_toggled.emit())
 	_speed_btn = Button.new()
-	_speed_btn.text = "速度 x1"
+	_speed_btn.text = I18n.s("speed", [1])
 	_speed_btn.pressed.connect(func(): speed_pressed.emit())
 	var legend_btn := Button.new()
-	legend_btn.text = "裂变表"
+	legend_btn.text = I18n.s("legend")
 	legend_btn.pressed.connect(func(): _legend.visible = not _legend.visible)
-	var runes_btn := Button.new()
-	runes_btn.text = "符文 (R)"
-	runes_btn.pressed.connect(func(): runes_pressed.emit())
 	var console_btn := Button.new()
-	console_btn.text = "控制台 F1"
+	console_btn.text = I18n.s("console")
 	console_btn.pressed.connect(func(): console_pressed.emit())
-	for b in [_auto_btn, _speed_btn, legend_btn, runes_btn, console_btn]:
+	for b in [_auto_btn, _speed_btn, legend_btn, console_btn]:
 		btns.add_child(b)
 	top.add_child(btns)
 
@@ -324,67 +311,32 @@ func _build_legend() -> void:
 	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	t.add_theme_font_size_override("normal_font_size", 14)
 	var c := func(e: int) -> String:
-		return "[color=#%s]%s[/color]" % [Data.ELEMENT_COLORS[e].to_html(false), Data.ELEMENT_NAMES[e]]
-	var txt := "[color=#e6b35f][b]元素裂变 Element Fission[/b][/color]\n"
-	txt += "伤害技能会给目标留下施法者的[b]元素印记[/b]；用[b]不同元素[/b]命中带印记的目标，会消耗印记触发裂变：\n"
+		return "[color=#%s]%s[/color]" % [Data.ELEMENT_COLORS[e].to_html(false), I18n.element(e)]
+	var txt := "[color=#e6b35f][b]%s[/b][/color]\n%s\n" % [I18n.s("fission_title"), I18n.s("fission_intro")]
 	var rows := [
 		[[0, 2], "wildfire"], [[0, 1], "steam"], [[1, 2], "frost"],
 		[[3, 4], "annihilate"], [[3, -1], "radiance"], [[4, -1], "corrode"],
 	]
 	for r in rows:
 		var info: Dictionary = Data.REACTIONS[r[1]]
-		var pair: String = c.call(r[0][0]) + "+" + (c.call(r[0][1]) if r[0][1] >= 0 else "火/水/风")
-		txt += "• %s → [b]%s[/b] %s\n" % [pair, info.name, info.desc]
-	txt += "\n克制：%s→%s→%s→%s，%s⇄%s" % [c.call(0), c.call(2), c.call(1), c.call(0), c.call(3), c.call(4)]
+		var pair: String = c.call(r[0][0]) + "+" + (c.call(r[0][1]) if r[0][1] >= 0 else I18n.s("fission_other"))
+		txt += "• %s → [b]%s[/b] %s\n" % [pair, I18n.f(info, "name"), I18n.f(info, "desc")]
+	txt += I18n.s("affinity_line", [c.call(0), c.call(2), c.call(1), c.call(0), c.call(3), c.call(4)])
 	t.text = txt
 	_legend.add_child(t)
 	_legend.visible = false
 	root.add_child(_legend)
 
 
-func _build_result() -> void:
-	_result = PanelContainer.new()
-	_result.set_anchors_preset(Control.PRESET_CENTER)
-	_result.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_result.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_result.custom_minimum_size = Vector2(560, 0)
-	_result.add_theme_stylebox_override("panel", _sb(Color(0.04, 0.04, 0.1, 0.94), BRASS, 3, 14, 22))
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 12)
-	_result_title = _label("胜利", 52, BRASS)
-	_result_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_result_title.add_theme_constant_override("outline_size", 10)
-	v.add_child(_result_title)
-	_result_body = RichTextLabel.new()
-	_result_body.bbcode_enabled = true
-	_result_body.fit_content = true
-	_result_body.add_theme_font_size_override("normal_font_size", 16)
-	v.add_child(_result_body)
-	var h := HBoxContainer.new()
-	h.alignment = BoxContainer.ALIGNMENT_CENTER
-	h.add_theme_constant_override("separation", 12)
-	var next := Button.new()
-	next.text = "下一层 ▶"
-	next.pressed.connect(func(): next_pressed.emit())
-	var retry := Button.new()
-	retry.text = "重新挑战"
-	retry.pressed.connect(func(): retry_pressed.emit())
-	var runes := Button.new()
-	runes.text = "符文盘"
-	runes.pressed.connect(func(): runes_pressed.emit())
-	for b in [next, retry, runes]:
-		b.custom_minimum_size = Vector2(140, 48)
-		h.add_child(b)
-	v.add_child(h)
-	_result.add_child(v)
-	_result.visible = false
-	root.add_child(_result)
-
-
 # --- Nameplates & portraits ------------------------------------------------------------
-func setup_units(units: Array, wave: int, wins: int, losses: int) -> void:
+func setup_units(units: Array, relics: Array, floor_text: String = "") -> void:
 	clear_units()
-	_wave_label.text = "星轨第 %d 层   胜 %d · 负 %d" % [wave, wins, losses]
+	_wave_label.text = floor_text
+	var parts: Array = []
+	for r in relics:
+		var info: Dictionary = Data.RELICS[r]
+		parts.append("[hint=%s][color=#%s]◆%s[/color][/hint]" % [I18n.f(info, "desc"), Data.RARITY_COLORS[int(info.rarity)].to_html(false), I18n.f(info, "name")])
+	_relic_label.text = " ".join(parts)
 	for u in units:
 		_make_plate(u)
 		_make_portrait(u)
@@ -406,9 +358,10 @@ func _make_plate(u: Node) -> void:
 	box.add_theme_constant_override("separation", 2)
 	var name_row := HBoxContainer.new()
 	name_row.add_theme_constant_override("separation", 4)
-	var el := _label(Data.ELEMENT_NAMES[u.element], 14, Data.ELEMENT_COLORS[u.element])
+	var el := _label(I18n.element(u.element), 14, Data.ELEMENT_COLORS[u.element])
 	name_row.add_child(el)
-	var nm := _label("%s Lv%d%s" % [u.display_name, u.level, "  ★首领" if u.is_boss else ""], 13, IVORY)
+	var seams := "" if u.mends <= 0 else " " + "◆".repeat(u.mends)
+	var nm := _label("%s Lv%d%s%s" % [u.display_name, u.level, seams, I18n.s("boss_tag") if u.is_boss else ""], 13, IVORY)
 	name_row.add_child(nm)
 	box.add_child(name_row)
 	var hp := _bar(ALLY_COL.lerp(Color(0.3, 1.0, 0.5), 0.5) if u.team == 0 else ENEMY_COL, 9)
@@ -435,7 +388,8 @@ func _make_plate(u: Node) -> void:
 
 func _make_portrait(u: Node) -> void:
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(158, 62)
+	b.custom_minimum_size = Vector2(186 if I18n.en() else 158, 62)
+	b.clip_contents = true
 	var v := VBoxContainer.new()
 	v.set_anchors_preset(Control.PRESET_FULL_RECT)
 	v.offset_left = 8
@@ -444,7 +398,7 @@ func _make_portrait(u: Node) -> void:
 	v.offset_bottom = -6
 	v.add_theme_constant_override("separation", 3)
 	var h := HBoxContainer.new()
-	h.add_child(_label(Data.ELEMENT_NAMES[u.element], 15, Data.ELEMENT_COLORS[u.element]))
+	h.add_child(_label(I18n.element(u.element), 15, Data.ELEMENT_COLORS[u.element]))
 	h.add_child(_label(u.display_name, 14))
 	v.add_child(h)
 	var hp := _bar(Color(0.35, 0.95, 0.5) if u.team == 0 else ENEMY_COL, 8)
@@ -493,12 +447,12 @@ func update_units(cam: Camera3D) -> void:
 func _status_bbcode(u: Node) -> String:
 	var parts: Array = []
 	if u.mark >= 0:
-		parts.append("[bgcolor=#%s][color=#000000] %s印 [/color][/bgcolor]" % [Data.ELEMENT_COLORS[u.mark].to_html(false), Data.ELEMENT_NAMES[u.mark]])
+		parts.append("[bgcolor=#%s][color=#000000] %s [/color][/bgcolor]" % [Data.ELEMENT_COLORS[u.mark].to_html(false), I18n.s("mark", [I18n.element(u.mark)])])
 	for s in u.statuses:
 		var info: Dictionary = Data.STATUS[s.id]
-		parts.append("[color=#%s]%s%d[/color]" % [info.color.to_html(false), info.label, s.turns])
+		parts.append("[color=#%s]%s%d[/color]" % [info.color.to_html(false), I18n.f(info, "label"), s.turns])
 	if u.ultimate_ready():
-		parts.append("[color=#ffc850]★奥义[/color]")
+		parts.append("[color=#ffc850]%s[/color]" % I18n.s("ultimate_ready"))
 	return " ".join(parts)
 
 
@@ -511,7 +465,7 @@ func update_turn_order(order: Array) -> void:
 		var chip := PanelContainer.new()
 		var border := ALLY_COL if u.team == 0 else ENEMY_COL
 		chip.add_theme_stylebox_override("panel", _sb(Data.ELEMENT_COLORS[u.element].darkened(0.55), border, 2 if i > 0 else 3, 6, 3))
-		var l := _label(u.display_name.substr(0, 2), 13 if i > 0 else 15)
+		var l := _label(u.display_name.substr(0, 5 if I18n.en() else 2), 13 if i > 0 else 15)
 		chip.add_child(l)
 		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_order_row.add_child(chip)
@@ -527,14 +481,14 @@ func show_skills(u: Node, selected: int, cd_free: bool) -> void:
 		var sub := ""
 		var ok := true
 		if i == 2:
-			sub = "奥义 · 灵力 %d/100" % int(u.energy)
+			sub = I18n.s("ult_energy", [int(u.energy), int(u.ult_cost)])
 			ok = u.ultimate_ready() or cd_free
 		elif int(u.cooldowns[i]) > 0 and not cd_free:
-			sub = "冷却 %d 回合" % int(u.cooldowns[i])
+			sub = I18n.s("on_cd", [int(u.cooldowns[i])])
 			ok = false
 		else:
-			sub = "普攻" if i == 0 else "就绪 · 冷却%d" % int(sk.cd)
-		b.text = "%d  %s\n%s" % [i + 1, sk.name, sub]
+			sub = I18n.s("basic") if i == 0 else I18n.s("ready_cd", [int(sk.cd)])
+		b.text = "%d  %s\n%s" % [i + 1, I18n.f(sk, "name"), sub]
 		b.disabled = not ok
 		var col: Color = Data.ELEMENT_COLORS[u.element]
 		if i == selected:
@@ -555,9 +509,9 @@ func _on_skill_hover(i: int) -> void:
 
 func _set_desc(u: Node, i: int) -> void:
 	var sk: Dictionary = u.skills[i]
-	var tgt: String = {"enemy": "单体敌人", "all_enemies": "全体敌人", "all_allies": "全体队友"}[sk.target]
-	_desc.text = "[color=#e6b35f][b]%s[/b][/color]  [color=#9aa]%s[/color]\n%s\n[color=#8fb8ff]被动·%s：[/color]%s" % [
-		sk.name, tgt, sk.desc, u.species.passive.name, u.species.passive.desc]
+	var tgt := I18n.s("target_" + String(sk.target))
+	_desc.text = "[color=#e6b35f][b]%s[/b][/color]  [color=#9aa]%s[/color]\n%s\n[color=#8fb8ff]%s · %s：[/color]%s" % [
+		I18n.f(sk, "name"), tgt, I18n.f(sk, "desc"), I18n.s("passive"), I18n.f(u.species.passive, "name"), I18n.f(u.species.passive, "desc")]
 
 
 func set_preview(text: String) -> void:
@@ -578,11 +532,11 @@ func set_hint(text: String) -> void:
 
 func set_auto(on: bool) -> void:
 	_auto_btn.button_pressed = on
-	_auto_btn.text = "自动 ON" if on else "自动 AUTO"
+	_auto_btn.text = I18n.s("auto_on") if on else I18n.s("auto")
 
 
 func set_speed(mult: int) -> void:
-	_speed_btn.text = "速度 x%d" % mult
+	_speed_btn.text = I18n.s("speed", [mult])
 
 
 # --- Banners & log -------------------------------------------------------------------
@@ -609,195 +563,3 @@ func log_line(text: String) -> void:
 
 func clear_log() -> void:
 	_log.clear()
-
-
-# --- Result ---------------------------------------------------------------------------
-func show_result(victory: bool, body: String) -> void:
-	_result_title.text = "胜 利  VICTORY" if victory else "败 北  DEFEAT"
-	_result_title.add_theme_color_override("font_color", BRASS if victory else ENEMY_COL)
-	_result_body.text = body
-	_result.visible = true
-	_result.modulate.a = 0.0
-	_result.scale = Vector2.ONE * 0.9
-	var t := create_tween()
-	t.tween_property(_result, "modulate:a", 1.0, 0.3)
-
-
-func hide_result() -> void:
-	_result.visible = false
-
-
-func is_modal_open() -> bool:
-	return _board.visible
-
-
-# --- Rune Board ----------------------------------------------------------------------
-func _build_board() -> void:
-	_board = PanelContainer.new()
-	_board.set_anchors_preset(Control.PRESET_CENTER)
-	_board.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_board.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_board.custom_minimum_size = Vector2(1180, 640)
-	_board.add_theme_stylebox_override("panel", _sb(Color(0.03, 0.03, 0.09, 0.97), BRASS, 3, 14, 16))
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	var head := HBoxContainer.new()
-	head.add_child(_label("符文盘 · 星图编组", 26, BRASS))
-	var note := _label("   （改动在下一场战斗生效）", 14, Color(0.7, 0.7, 0.8))
-	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(note)
-	var close := Button.new()
-	close.text = "关闭 ✕"
-	close.pressed.connect(close_board)
-	head.add_child(close)
-	v.add_child(head)
-	var body := HBoxContainer.new()
-	body.add_theme_constant_override("separation", 14)
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	var left := VBoxContainer.new()
-	left.custom_minimum_size = Vector2(290, 0)
-	left.add_child(_label("图鉴 / 队伍（★ = 出战）", 16, BRASS))
-	_roster_list = ItemList.new()
-	_roster_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_roster_list.item_selected.connect(func(i): _board_mon = int(_roster_list.get_item_metadata(i)); _board_slot = -1; _refresh_board())
-	left.add_child(_roster_list)
-	var team_row := HBoxContainer.new()
-	team_row.add_child(_label("设为队伍位：", 14))
-	for i in 4:
-		var b := Button.new()
-		b.text = "%d" % (i + 1) + ("(队长)" if i == 0 else "")
-		b.pressed.connect(func():
-			if _board_mon >= 0:
-				_profile.set_team_slot(i, _board_mon)
-				_refresh_board())
-		team_row.add_child(b)
-	left.add_child(team_row)
-	_summon_btn = Button.new()
-	_summon_btn.pressed.connect(func():
-		var m: Dictionary = _profile.summon()
-		if not m.is_empty():
-			_board_mon = int(m.uid)
-			banner("召唤成功！", BRASS, Data.full_name(m.species))
-		_refresh_board())
-	left.add_child(_summon_btn)
-	body.add_child(left)
-
-	var mid := VBoxContainer.new()
-	mid.custom_minimum_size = Vector2(430, 0)
-	_mon_info = RichTextLabel.new()
-	_mon_info.bbcode_enabled = true
-	_mon_info.fit_content = true
-	_mon_info.add_theme_font_size_override("normal_font_size", 14)
-	mid.add_child(_mon_info)
-	var dial := Control.new()
-	dial.custom_minimum_size = Vector2(430, 300)
-	for i in 6:
-		var a := -PI / 2.0 + TAU * i / 6.0
-		var b := Button.new()
-		b.custom_minimum_size = Vector2(150, 64)
-		b.size = Vector2(150, 64)
-		b.position = Vector2(215, 150) + Vector2(cos(a), sin(a)) * Vector2(145, 112) - Vector2(75, 32)
-		b.add_theme_font_size_override("font_size", 12)
-		b.pressed.connect(func(): _board_slot = i; _refresh_board())
-		dial.add_child(b)
-		_slot_buttons.append(b)
-	mid.add_child(dial)
-	body.add_child(mid)
-
-	var right := VBoxContainer.new()
-	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right.add_child(_label("符文仓库（选中槽位后筛选）", 16, BRASS))
-	_inv_list = ItemList.new()
-	_inv_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right.add_child(_inv_list)
-	var rb := HBoxContainer.new()
-	var equip := Button.new()
-	equip.text = "装备所选符文"
-	equip.pressed.connect(func():
-		var sel := _inv_list.get_selected_items()
-		if _board_mon >= 0 and sel.size() > 0:
-			_profile.equip(_board_mon, int(_inv_uids[sel[0]]))
-			_refresh_board())
-	var unequip := Button.new()
-	unequip.text = "卸下当前槽位"
-	unequip.pressed.connect(func():
-		if _board_mon >= 0 and _board_slot >= 0:
-			_profile.unequip(_board_mon, _board_slot)
-			_refresh_board())
-	var all := Button.new()
-	all.text = "显示全部"
-	all.pressed.connect(func(): _board_slot = -1; _refresh_board())
-	rb.add_child(equip)
-	rb.add_child(unequip)
-	rb.add_child(all)
-	right.add_child(rb)
-	body.add_child(right)
-	v.add_child(body)
-	_board.add_child(v)
-	_board.visible = false
-	root.add_child(_board)
-
-
-func open_board(profile) -> void:
-	_profile = profile
-	if _board_mon < 0 or _profile.get_monster(_board_mon).is_empty():
-		_board_mon = int(_profile.data.team[0])
-	_board_slot = -1
-	_board.visible = true
-	_refresh_board()
-
-
-func close_board() -> void:
-	_board.visible = false
-	rune_board_closed.emit()
-
-
-func _refresh_board() -> void:
-	var data: Dictionary = _profile.data
-	_summon_btn.text = "使用召唤卷轴（剩余 %d）" % int(data.scrolls)
-	_summon_btn.disabled = int(data.scrolls) <= 0
-	_roster_list.clear()
-	var team: Array = data.team.map(func(x): return int(x))
-	for m in data.roster:
-		var idx := team.find(int(m.uid))
-		var prefix := "★%d " % (idx + 1) if idx >= 0 else "    "
-		var i := _roster_list.add_item("%s%s  Lv%d" % [prefix, Data.full_name(m.species), int(m.level)])
-		_roster_list.set_item_metadata(i, int(m.uid))
-		_roster_list.set_item_custom_fg_color(i, Data.ELEMENT_COLORS[Data.SPECIES[m.species].element].lerp(IVORY, 0.4))
-		if int(m.uid) == _board_mon:
-			_roster_list.select(i)
-	var mon: Dictionary = _profile.get_monster(_board_mon)
-	if mon.is_empty():
-		return
-	var sp: Dictionary = Data.SPECIES[mon.species]
-	var st: Dictionary = _profile.stats_of(mon)
-	var sets := ", ".join(st.sets.map(func(sid): return "%s(%s)" % [Data.RUNE_SETS[sid].name, Data.stat_text(Data.RUNE_SETS[sid].stat, Data.RUNE_SETS[sid].value)]))
-	_mon_info.text = "[b][color=#%s]%s[/color][/b]  %s · %s  Lv%d  (EXP %d/%d)\n生命 %d  攻击 %d  防御 %d  速度 %d\n暴击 %d%%  暴伤 %d%%  命中 %d%%  抵抗 %d%%\n套装：%s\n[color=#8fb8ff]队长技：[/color]%s" % [
-		Data.ELEMENT_COLORS[sp.element].to_html(false), Data.full_name(mon.species), sp.en, sp.role, int(mon.level),
-		int(mon.exp), Data.exp_to_next(int(mon.level)), st.hp, st.atk, st.def, st.spd, st.crit_rate, st.crit_dmg, st.acc, st.res,
-		sets if sets != "" else "无", Data.stat_text(sp.leader.stat, sp.leader.value)]
-	var runes: Array = _profile.runes_of(mon)
-	for i in 6:
-		var b: Button = _slot_buttons[i]
-		var r = runes[i]
-		if r == null or r.is_empty():
-			b.text = "%d号位\n（空）" % (i + 1)
-			b.remove_theme_stylebox_override("normal")
-		else:
-			b.text = "%d号位 %s\n%s" % [i + 1, Data.RUNE_SETS[r.set].name, Data.stat_text(r.stat, r.value)]
-			b.add_theme_stylebox_override("normal", _sb(Color(0.06, 0.05, 0.14, 0.95), Data.GRADE_COLORS[int(r.grade)], 2, 30, 6))
-		if i == _board_slot:
-			b.add_theme_stylebox_override("normal", _sb(Color(0.3, 0.22, 0.08, 0.98), Color(1, 0.9, 0.5), 3, 30, 6))
-	_inv_list.clear()
-	_inv_uids.clear()
-	var sorted: Array = data.runes.duplicate()
-	sorted.sort_custom(func(a, b): return int(a.slot) * 10 - int(a.grade) < int(b.slot) * 10 - int(b.grade))
-	for r in sorted:
-		if _board_slot >= 0 and int(r.slot) != _board_slot:
-			continue
-		var owner: Dictionary = _profile.owner_of(int(r.uid))
-		var suffix := "" if owner.is_empty() else "  ← %s" % Data.SPECIES[owner.species].name
-		var i := _inv_list.add_item(Data.rune_text(r) + suffix)
-		_inv_list.set_item_custom_fg_color(i, Data.GRADE_COLORS[int(r.grade)].lerp(IVORY, 0.3))
-		_inv_uids.append(int(r.uid))

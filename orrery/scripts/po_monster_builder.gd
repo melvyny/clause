@@ -88,7 +88,7 @@ static func build(species_id: String, is_enemy: bool) -> Node3D:
 	k.root.set_meta("spinners", [])
 	k.root.set_meta("bobbers", [])
 	k.root.set_meta("porcelain", [])
-	var el: int = Data.SPECIES[species_id].element
+	var el: int = Data.species_info(species_id).element
 	k.glaze = GLAZES[el]
 	k.core = Data.ELEMENT_COLORS[el]
 	k.eye = Color(1.0, 0.2, 0.25) if is_enemy else k.core.lerp(Color.WHITE, 0.35)
@@ -115,6 +115,8 @@ static func build(species_id: String, is_enemy: bool) -> Node3D:
 			_mantis(k)
 		"tenmoku":
 			_serpent(k)
+		"boss":
+			_boss(k)
 	return k.root
 
 
@@ -426,6 +428,52 @@ static func _serpent(k: Kit) -> void:
 	body.add_child(haze)
 	k.root.set_meta("height", 2.5)
 	k.root.set_meta("radius", 0.8)
+
+
+# --- The Unmended King: a towering broken vase whose cracks bleed red ------------------
+static func _boss(k: Kit) -> void:
+	k.core = Color(1.0, 0.15, 0.1)
+	var body := k.node(k.root, Vector3.ZERO)
+	k.bob(body, 0.06, 0.8)
+	var mats: Array = []
+	var profile := [[0.55, 0.3], [0.8, 0.8], [0.95, 1.3], [0.85, 1.8], [0.55, 2.25], [0.4, 2.6], [0.5, 2.9]]
+	for i in profile.size():
+		var m := k.p(0.0, 1.0, 2.2, Color(0.1, 0.08, 0.1))
+		mats.append(m)
+		# gaps: some rings are chipped away on one side
+		var seg := M.add_mesh(body, M.sphere(profile[i][0], 28, 10), m, Vector3(0, profile[i][1], 0), Vector3(0, i * 37, 0), Vector3(1, 0.55, 1))
+		if i in [2, 4]:
+			seg.scale = Vector3(1, 0.55, 0.8)
+	# cobalt dragon band painted around the belly
+	M.add_mesh(body, M.torus(0.93, 1.0, 64), M.porcelain(Color(0.07, 0.17, 0.55), 0.0, k.core, 1.0, 4.0, 0.0), Vector3(0, 1.3, 0))
+	# the mouth: a glowing red throat
+	M.add_mesh(body, M.torus(0.38, 0.55, 48), k.p(0.0, 1.0, 3.0, Color(0.1, 0.08, 0.1)), Vector3(0, 3.05, 0))
+	M.add_mesh(body, M.cylinder(0.38, 0.38, 0.05, 32), M.glow(k.core, 6.0), Vector3(0, 3.02, 0))
+	var throat := M.particles(Color(1.0, 0.25, 0.15, 0.9), 40, 1.2, 0.35, 1.5, Vector3.UP, 20, Vector3(0, 0.5, 0), 0.3)
+	throat.position = Vector3(0, 3.1, 0)
+	body.add_child(throat)
+	k.eyes(body, Vector3(0, 2.3, -0.5), 0.2, 0.09)
+	var heart := OmniLight3D.new()
+	heart.light_color = k.core
+	heart.light_energy = 2.5
+	heart.omni_range = 5.0
+	heart.position = Vector3(0, 1.5, -1.2)
+	body.add_child(heart)
+	# orbiting shards it refuses to put back
+	for ring_i in 2:
+		var orbit := k.node(body, Vector3(0, 1.2 + ring_i * 1.1, 0), Vector3(15 - ring_i * 30, 0, 10))
+		for i in 7:
+			var a := TAU * i / 7.0
+			var shard := M.add_mesh(orbit, M.prism(Vector3(0.35, 0.5, 0.06)), k.p(0.0, 1.0, 4.0, Color(0.1, 0.08, 0.1)),
+				Vector3(cos(a), 0.15 * sin(a * 3.0), sin(a)) * (1.6 + ring_i * 0.3), Vector3(randf() * 60, rad_to_deg(-a), randf() * 60))
+			k.bob(shard, 0.12, 1.5 + i * 0.2, i)
+		k.spin(orbit, Vector3.UP, 30.0 * (1 if ring_i == 0 else -1))
+	for m in k.root.get_meta("porcelain"):
+		m.set_shader_parameter("gold", Color(0.75, 0.08, 0.05))
+		m.set_shader_parameter("damage", 0.35)
+	k.muzzle(body, Vector3(0, 3.0, -0.3))
+	k.root.set_meta("height", 3.3)
+	k.root.set_meta("radius", 1.2)
 
 
 # --- Imported glTF creatures ---------------------------------------------------------
