@@ -8,6 +8,7 @@ extends Node
 ##   --gm-demo=<screen>         jump to title|map|battle|mend|reward (for screenshots)
 ##   --gm-shot=<path.png>       save a screenshot after --gm-shot-delay=<sec>, then quit
 ##   --gm-lang=<zh|en>          force the language
+##   --gm-sim[=N]               balance simulation: N fast battles per floor & starter, prints a table, quits
 
 const Data = preload("po_data.gd")
 const I18n = preload("po_i18n.gd")
@@ -75,6 +76,11 @@ func _ready() -> void:
 			printerr("AUTOTEST TIMEOUT")
 			get_tree().quit(1))
 	_setup_screenshot()
+	for a in _args:
+		if a.begins_with("--gm-sim"):
+			audio.muted = true
+			_simulate.call_deferred(int(a.get_slice("=", 1)) if "=" in a else 20)
+			return
 	var demo := ""
 	for a in _args:
 		if a.begins_with("--gm-demo="):
@@ -293,10 +299,27 @@ func _creature_detail(sid: String) -> String:
 	var sp: Dictionary = Data.SPECIES[sid]
 	var o: Dictionary = sp.origin
 	var t := "[color=#%s][b]%s[/b][/color]\n[color=#e6b35f]%s · %s[/color]\n" % [_hex(Data.ELEMENT_COLORS[sp.element]), I18n.f(sp, "name"), I18n.f(o, "era"), I18n.f(o, "piece")]
+	t += "%s · %s\n" % [_tags_text(sid), I18n.s("toughness", [int(sp.toughness)])]
 	t += "[color=#8fb8ff]%s[/color] %s\n" % [I18n.f(sp.passive, "name"), I18n.f(sp.passive, "desc")]
 	for sk in sp.skills:
 		t += "[color=#e6b35f]• %s[/color] %s\n" % [I18n.f(sk, "name"), I18n.f(sk, "desc")]
 	return t.strip_edges()
+
+
+func _tags_text(sid: String) -> String:
+	var names: Array = []
+	for tg in Data.SPECIES[sid].tags:
+		names.append(I18n.f(Data.TRAITS[tg], "name"))
+	return "[color=#ffd060]%s[/color]" % " · ".join(names)
+
+
+func _upgrade_bbcode(uid: int, upgrade_id: String, extra: String = "") -> String:
+	var m: Dictionary = run.member(uid)
+	var sp: Dictionary = Data.SPECIES[m.species]
+	var up: Dictionary = Data.upgrade_info(m.species, upgrade_id)
+	var t := "[center][font_size=15][color=#%s]%s[/color][/font_size]\n" % [_hex(Data.ELEMENT_COLORS[sp.element]), I18n.f(sp, "name")]
+	t += "[font_size=21][color=#ffc860][b]✦ %s[/b][/color][/font_size][/center]\n%s%s" % [I18n.f(up, "name"), I18n.f(up, "desc"), extra]
+	return t
 
 
 func _relic_bbcode(id: String, extra: String = "") -> String:
@@ -328,6 +351,18 @@ func _top_bar() -> void:
 	bar.add_child(left)
 	for m in run.party:
 		bar.add_child(_party_card(m))
+	var traits := run.team_traits()
+	if not traits.is_empty():
+		var tv := HBoxContainer.new()
+		tv.add_theme_constant_override("separation", 3)
+		tv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		for tid in Data.TRAIT_ORDER:
+			if traits.has(tid):
+				var ic := _icon(Icons.tex(Icons.TRAIT_ICON.get(tid, "ring"), Color(0.42, 0.3, 0.12), 48), 30)
+				ic.mouse_filter = Control.MOUSE_FILTER_STOP
+				tip.attach(ic, HUD.trait_tip.bind(tid, int(traits[tid])))
+				tv.add_child(ic)
+		bar.add_child(tv)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -394,6 +429,8 @@ func _party_card(m: Dictionary) -> Control:
 	if m.shattered:
 		seams.add_child(_icon(Icons.tex("def_break", Color(0, 0, 0, 0), 32, "#ff6060"), 14))
 	v.add_child(seams)
+	var ups := _label("✦".repeat(m.get("upgrades", []).size()), 11, Color(1.0, 0.8, 0.4))
+	v.add_child(ups)
 	card.add_child(v)
 	tip.attach(card, _member_tip.bind(m))
 	return card
@@ -409,7 +446,28 @@ func _member_tip(m: Dictionary) -> String:
 	for sc in m.scars:
 		t += "[color=#ffc860]◆ %s[/color] %s\n" % [I18n.f(Data.SCARS[sc], "name"), I18n.f(Data.SCARS[sc], "desc")]
 	t += "[color=#8fb8ff]%s[/color] %s" % [I18n.f(sp.passive, "name"), I18n.f(sp.passive, "desc")]
+	for uid in m.get("upgrades", []):
+		var up: Dictionary = Data.upgrade_info(m.species, uid)
+		t += "\n[color=#ffc860]✦ %s[/color] %s" % [I18n.f(up, "name"), I18n.f(up, "desc")]
 	return t
+
+
+## One line per trait the species list activates (or could activate), for tips.
+func _traits_bbcode(species_ids: Array) -> String:
+	var counts := Data.trait_counts(species_ids)
+	var active := Data.active_traits(species_ids)
+	var t := ""
+	for tid in Data.TRAIT_ORDER:
+		if int(counts.get(tid, 0)) == 0:
+			continue
+		var info: Dictionary = Data.TRAITS[tid]
+		var need: int = int(info.tiers[0])
+		if active.has(tid):
+			var descs: Array = info.desc_en if I18n.en() else info.desc
+			t += "[color=#ffd060]◈ %s %d[/color] %s\n" % [I18n.f(info, "name"), int(counts[tid]), descs[int(active[tid])]]
+		else:
+			t += "[color=#777788]◇ %s %d/%d[/color]\n" % [I18n.f(info, "name"), int(counts[tid]), need]
+	return t.strip_edges()
 
 
 # --- Title & starters ----------------------------------------------------------------------------
@@ -501,9 +559,13 @@ func _codex_selected(sid: String) -> void:
 	var t := "[font_size=28][color=#%s][b]%s[/b][/color][/font_size]\n" % [_hex(Data.ELEMENT_COLORS[sp.element]), I18n.f(sp, "name")]
 	t += "[color=#e6b35f]%s · %s · %s[/color]\n" % [I18n.f(o, "country"), I18n.f(o, "era"), I18n.f(o, "piece")]
 	t += "%s · %s\n\n[i]%s[/i]\n\n" % [I18n.element(sp.element), I18n.f(sp, "role"), I18n.f(sp, "lore")]
+	t += "%s · %s\n" % [_tags_text(sid), I18n.s("toughness", [int(sp.toughness)])]
 	t += "[color=#8fb8ff]%s · %s[/color] %s\n" % [I18n.s("passive"), I18n.f(sp.passive, "name"), I18n.f(sp.passive, "desc")]
 	for sk in sp.skills:
 		t += "[color=#e6b35f]• %s[/color] %s\n" % [I18n.f(sk, "name"), I18n.f(sk, "desc")]
+	t += "\n[color=#ffc860]%s[/color]\n" % I18n.s("upgrades_title")
+	for up in sp.upgrades:
+		t += "[color=#ffc860]✦ %s[/color] %s\n" % [I18n.f(up, "name"), I18n.f(up, "desc")]
 	_codex_info.text = t
 
 
@@ -535,7 +597,7 @@ func _starter_tip(st: Dictionary) -> String:
 	for sid in st.team:
 		var sp: Dictionary = Data.SPECIES[sid]
 		t += "[color=#%s][b]%s[/b][/color] %s · %s\n[i][color=#ccd]%s[/color][/i]\n" % [_hex(Data.ELEMENT_COLORS[sp.element]), I18n.f(sp, "name"), I18n.element(sp.element), I18n.f(sp, "role"), I18n.f(sp, "lore")]
-	return t.strip_edges()
+	return (t + "\n" + _traits_bbcode(st.team)).strip_edges()
 
 
 func _start_run(i: int) -> void:
@@ -631,8 +693,9 @@ func _enter_battle(kind: String, row: int) -> void:
 	var report: Dictionary = result[1]
 	var res: Dictionary = run.apply_battle(victory, report, kind, row)
 	if _autotest:
-		print("AUTOTEST %s row=%d: %s turns=%d reactions=%d gold=%d party=%s" % [kind, row, "WIN" if victory else "LOSS", report.turns, report.reactions, run.gold,
-			run.party.map(func(m): return "%s L%d hp%.2f s%d%s" % [m.species, m.level, m.hp, m.mends, " X" if m.shattered else ""])])
+		print("AUTOTEST %s row=%d: %s turns=%d ally_turns=%d breaks=%d chains=%d interrupts=%d gold=%d party=%s" % [kind, row, "WIN" if victory else "LOSS",
+			report.turns, report.ally_turns, report.breaks, report.chains, report.interrupts, run.gold,
+			run.party.map(func(m): return "%s L%d hp%.2f s%d u%d%s" % [m.species, m.level, m.hp, m.mends, m.upgrades.size(), " X" if m.shattered else ""])])
 	if not victory or run.fighters().is_empty():
 		show_end(false)
 	elif kind == "boss":
@@ -656,30 +719,48 @@ func show_reward(kind: String, res: Dictionary) -> void:
 	for n in res.dust:
 		lines += "[center]%s[/center]\n" % I18n.s("reward_dust", [n])
 	v.add_child(_rich(lines, 17))
-	var pick := _label(I18n.s("pick_relic"), 20, IVORY)
+	var pick := _label(I18n.s("pick_reward"), 20, IVORY)
 	pick.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(pick)
 	var h := HBoxContainer.new()
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
 	h.add_theme_constant_override("separation", 16)
-	var choices: Array = run.relic_choices(3, 1 if kind == "elite" else 0)
-	for r in choices:
+	# normal fights: 2 craft upgrades + 1 glaze shard; elites: 1 upgrade + 2 rarer shards
+	var ups: Array = run.upgrade_choices(1 if kind == "elite" else 2)
+	var shards: Array = run.relic_choices(3 - ups.size(), 1 if kind == "elite" else 0)
+	for o in ups:
+		var m: Dictionary = run.member(int(o.uid))
+		var c := _card(_upgrade_bbcode(int(o.uid), o.upgrade), Color(1.0, 0.78, 0.35), _take_upgrade.bind(int(o.uid), o.upgrade), Vector2(270, 220),
+			[Icons.portrait(m.species, Data.SPECIES[m.species].element, 96)], 56)
+		tip.attach(c, _member_tip.bind(m))
+		h.add_child(c)
+	for r in shards:
 		var rcol: Color = Data.RARITY_COLORS[int(Data.RELICS[r].rarity)]
-		h.add_child(_card(_relic_bbcode(r), rcol, _take_relic.bind(r), Vector2(270, 200), [Icons.tex("shard", rcol.darkened(0.45), 96)], 56))
+		h.add_child(_card(_relic_bbcode(r), rcol, _take_relic.bind(r), Vector2(270, 220), [Icons.tex("shard", rcol.darkened(0.45), 96)], 56))
 	v.add_child(h)
 	var skip := _button(I18n.s("skip"), show_map, 160)
 	skip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	v.add_child(skip)
 	if _autotest:
-		if choices.is_empty():
-			show_map.call_deferred()
+		if not ups.is_empty():
+			_take_upgrade.call_deferred(int(ups[0].uid), ups[0].upgrade)
+		elif not shards.is_empty():
+			_take_relic.call_deferred(shards[0])
 		else:
-			_take_relic.call_deferred(choices[0])
+			show_map.call_deferred()
 
 
 func _take_relic(id: String) -> void:
 	run.relics.append(id)
 	audio.play("buff")
+	show_map()
+
+
+func _take_upgrade(uid: int, upgrade_id: String) -> void:
+	run.apply_upgrade(uid, upgrade_id)
+	audio.play("buff")
+	var up: Dictionary = Data.upgrade_info(run.member(uid).species, upgrade_id)
+	_toast("✦ %s" % I18n.f(up, "name"))
 	show_map()
 
 
@@ -699,9 +780,25 @@ func show_kiln() -> void:
 		tip.attach(kc, _creature_detail.bind(sid))
 		h.add_child(kc)
 	v.add_child(h)
+	# 回炉: or put one of your spirits back in the kiln for a new craft technique
+	var refire: Array = run.upgrade_choices(3)
+	if not refire.is_empty():
+		v.add_child(_label(I18n.s("kiln_refire"), 20, Color(1.0, 0.75, 0.45)))
+		var h2 := HBoxContainer.new()
+		h2.add_theme_constant_override("separation", 16)
+		for o in refire:
+			var m: Dictionary = run.member(int(o.uid))
+			var c := _card(_upgrade_bbcode(int(o.uid), o.upgrade), Color(1.0, 0.6, 0.3), _take_upgrade.bind(int(o.uid), o.upgrade), Vector2(300, 170),
+				[Icons.portrait(m.species, Data.SPECIES[m.species].element, 96)], 44)
+			tip.attach(c, _member_tip.bind(m))
+			h2.add_child(c)
+		v.add_child(h2)
 	v.add_child(_button(I18n.s("skip"), show_map, 160))
 	if _autotest:
-		_kiln_pick.call_deferred(choices[0])
+		if run.party.size() < Run.MAX_PARTY or refire.is_empty():
+			_kiln_pick.call_deferred(choices[0])
+		else:
+			_take_upgrade.call_deferred(int(refire[0].uid), refire[0].upgrade)
 
 
 func _kiln_pick(sid: String) -> void:
@@ -827,11 +924,14 @@ func _toast(text: String, secs: float = 2.0) -> void:
 
 # --- Shop ---------------------------------------------------------------------------------------------
 var _shop_stock: Array = []
+var _shop_upgrade: Dictionary = {}
 
 
 func show_shop(restock: bool = true) -> void:
 	if restock or _screen != show_shop:
 		_shop_stock = run.relic_choices(3)
+		var ups: Array = run.upgrade_choices(1)
+		_shop_upgrade = ups[0] if not ups.is_empty() else {}
 	_screen = show_shop
 	_show_map_bg(false)
 	_clear_ui()
@@ -850,6 +950,15 @@ func show_shop(restock: bool = true) -> void:
 		var c := _card(_relic_bbcode(r, extra), scol, _buy.bind(r), Vector2(270, 220), [Icons.tex("shard", scol.darkened(0.45), 96)], 56)
 		c.disabled = owned or run.gold < price
 		h.add_child(c)
+	if not _shop_upgrade.is_empty():
+		var o := _shop_upgrade
+		var m: Dictionary = run.member(int(o.uid))
+		var have: bool = o.upgrade in m.upgrades
+		var extra := "\n\n[color=#ffd060]%s[/color]" % (I18n.s("sold") if have else I18n.s("buy", [run.upgrade_price()]))
+		var uc := _card(_upgrade_bbcode(int(o.uid), o.upgrade, extra), Color(1.0, 0.78, 0.35), _buy_upgrade, Vector2(270, 220),
+			[Icons.portrait(m.species, Data.SPECIES[m.species].element, 96)], 56)
+		uc.disabled = have or run.gold < run.upgrade_price()
+		h.add_child(uc)
 	v.add_child(h)
 	var heal := _button(I18n.s("heal_potion", [25]), _buy_heal, 360)
 	heal.disabled = run.gold < 25
@@ -861,6 +970,15 @@ func show_shop(restock: bool = true) -> void:
 				_buy.call_deferred(r)
 				return
 		show_map.call_deferred()
+
+
+func _buy_upgrade() -> void:
+	if _shop_upgrade.is_empty() or run.gold < run.upgrade_price():
+		return
+	run.gold -= run.upgrade_price()
+	run.apply_upgrade(int(_shop_upgrade.uid), _shop_upgrade.upgrade)
+	audio.play("buff")
+	show_shop(false)
 
 
 func _buy_heal() -> void:
@@ -924,7 +1042,7 @@ func show_end(won: bool) -> void:
 	v.add_child(t)
 	v.add_child(_rich("[center]%s[/center]" % I18n.s("run_won_text" if won else "run_lost_text"), 18, 700))
 	var row: int = run.node(run.current).row
-	v.add_child(_rich("[center][color=#e6b35f]%s[/color][/center]" % I18n.s("run_summary", [row, run.stats.battles, run.stats.reactions, run.total_seams()]), 16))
+	v.add_child(_rich("[center][color=#e6b35f]%s[/color][/center]" % I18n.s("run_summary", [row, run.stats.battles, run.stats.breaks, run.stats.chains, run.total_seams()]), 16))
 	var team := ""
 	for m in run.party:
 		team += "%s %s  " % [run.display_name(m), "◆".repeat(int(m.mends))]
@@ -934,9 +1052,66 @@ func show_end(won: bool) -> void:
 	v.add_child(b)
 	audio.play("victory" if won else "defeat")
 	if _autotest:
-		print("AUTOTEST RUN %s floor=%d battles=%d reactions=%d seams=%d relics=%s dust=%s" % [
-			"WON" if won else "LOST", row, run.stats.battles, run.stats.reactions, run.total_seams(), run.relics, run.dust])
+		print("AUTOTEST RUN %s floor=%d battles=%d breaks=%d chains=%d seams=%d relics=%s dust=%s" % [
+			"WON" if won else "LOST", row, run.stats.battles, run.stats.breaks, run.stats.chains, run.total_seams(), run.relics, run.dust])
 		get_tree().quit(0)
+
+
+# --- Balance simulation (--gm-sim) -------------------------------------------------------------------------
+## Plays many fast battles with the AI on both sides and prints a table per starter and floor.
+## Party model for floor r: level 4 + 0.8(r-1), about one craft upgrade per fight so far,
+## one glaze shard every two fights, a 4th spirit from floor 4 on, full HP.
+func _simulate(n: int) -> void:
+	var rows := [[1, "battle"], [2, "battle"], [3, "battle"], [3, "elite"], [4, "battle"], [5, "battle"], [5, "elite"],
+		[6, "battle"], [6, "elite"], [7, "battle"], [8, "boss"]]
+	print("SIM n=%d per cell | starter kind row | win%% ally_act turns est_sec breaks chains intr hp_left" % n)
+	var totals := {}
+	for starter in Data.STARTERS.size():
+		for rk in rows:
+			var row: int = rk[0]
+			var kind: String = rk[1]
+			var agg := {"win": 0, "ally_turns": 0, "turns": 0, "time": 0.0, "breaks": 0, "chains": 0, "interrupts": 0, "hp": 0.0}
+			for i in n:
+				var r := Run.new()
+				r.new_run(starter, 1000 * starter + 17 * row + i)
+				if row >= 4:
+					r.recruit(r.kiln_choices()[0])
+				for m in r.party:
+					m.level = 4 + roundi(0.8 * (row - 1))
+				for k in maxi(0, row - 1):
+					var ups: Array = r.upgrade_choices(1)
+					if not ups.is_empty():
+						r.apply_upgrade(int(ups[0].uid), ups[0].upgrade)
+				for k in (row - 1) / 2:
+					r.relics.append_array(r.relic_choices(1))
+				var b := Battle.new()
+				b.fast = true
+				b.audio = audio
+				b.auto_battle = true
+				world.add_child(b)
+				b.begin(r.ally_specs(), r.enemy_specs(row, kind), r.relics)
+				var result: Array = await b.finished
+				var rep: Dictionary = result[1]
+				if result[0]:
+					agg.win += 1
+				for k in ["ally_turns", "turns", "breaks", "chains", "interrupts"]:
+					agg[k] += int(rep[k])
+				agg.time += float(rep.time)
+				var hp := 0.0
+				for a in rep.allies:
+					hp += float(a.hp_ratio) if a.alive else 0.0
+				agg.hp += hp / maxf(1.0, rep.allies.size())
+				b.queue_free()
+				await get_tree().process_frame
+			var key := "%s %d" % [kind, row]
+			if not totals.has(key):
+				totals[key] = []
+			totals[key].append(float(agg.win) / n)
+			print("SIM %d %-6s %d | %3d%% %5.1f %5.1f %5.0f %4.1f %4.1f %4.1f %4.2f" % [starter, kind, row, roundi(100.0 * agg.win / n),
+				float(agg.ally_turns) / n, float(agg.turns) / n, agg.time / n, float(agg.breaks) / n, float(agg.chains) / n,
+				float(agg.interrupts) / n, agg.hp / n])
+	print("SIM done")
+	get_tree().quit(0)
 
 
 # --- Controls used by HUD / console -----------------------------------------------------------------------

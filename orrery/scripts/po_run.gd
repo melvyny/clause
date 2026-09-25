@@ -1,7 +1,7 @@
 extends RefCounted
 ## Goldmend :: state and rules of a single run (no nodes, no rendering).
 ## Map generation, party (HP carries over between fights, shattering and gold
-## mending), gold, glaze shards, enemy encounters, rewards and events.
+## mending, craft upgrades), gold, glaze shards, enemy encounters, rewards and events.
 
 const Data = preload("po_data.gd")
 const I18n = preload("po_i18n.gd")
@@ -11,14 +11,14 @@ const PLATE_RADIUS := 14.0
 const MAX_PARTY := 4
 
 var rng := RandomNumberGenerator.new()
-var party: Array = []       # {uid, species, level, hp, mends, scars, shattered, cause}
+var party: Array = []       # {uid, species, level, hp, mends, scars, shattered, cause, upgrades}
 var dust: Array = []        # names of figures lost for good
 var gold := 50
 var relics: Array = []
 var nodes: Array = []       # {id, row, type, pos: Vector3, next: [ids], visited}
 var current := 0
 var seen_events: Array = []
-var stats := {"battles": 0, "reactions": 0, "crits": 0}
+var stats := {"battles": 0, "breaks": 0, "chains": 0, "crits": 0}
 var _next_uid := 1
 
 
@@ -32,7 +32,7 @@ func new_run(starter: int, seed_value: int = -1) -> void:
 	relics.clear()
 	seen_events.clear()
 	gold = 50
-	stats = {"battles": 0, "reactions": 0, "crits": 0}
+	stats = {"battles": 0, "breaks": 0, "chains": 0, "crits": 0}
 	for sid in Data.STARTERS[starter].team:
 		recruit(sid)
 	_gen_map()
@@ -46,7 +46,7 @@ func recruit(sid: String, replace_uid: int = -1) -> Dictionary:
 		for m in party:
 			total += int(m.level)
 		lvl = maxi(4, roundi(float(total) / party.size()))
-	var mon := {"uid": _next_uid, "species": sid, "level": lvl, "hp": 1.0, "mends": 0, "scars": [], "shattered": false, "cause": {}}
+	var mon := {"uid": _next_uid, "species": sid, "level": lvl, "hp": 1.0, "mends": 0, "scars": [], "shattered": false, "cause": {}, "upgrades": []}
 	_next_uid += 1
 	if replace_uid >= 0:
 		for i in party.size():
@@ -108,44 +108,95 @@ func heal_all(fraction: float) -> void:
 			m.hp = minf(1.0, float(m.hp) + fraction)
 
 
+# --- Upgrades (器艺: craft techniques, 4 per spirit) ----------------------------------------------
+## Up to n offers of {uid, upgrade} for fighters, spread over different members.
+func upgrade_choices(n: int) -> Array:
+	var offers: Array = []
+	var members := fighters().duplicate()
+	_shuffle(members)
+	for pass_i in 2:
+		for m in members:
+			if offers.size() >= n:
+				return offers
+			var pool: Array = Data.SPECIES[m.species].upgrades.filter(func(u): return not u.id in m.upgrades and not offers.any(func(o): return o.uid == m.uid and o.upgrade == u.id))
+			if pool.is_empty() or (pass_i == 0 and offers.any(func(o): return o.uid == m.uid)):
+				continue
+			offers.append({"uid": int(m.uid), "upgrade": pool[rng.randi_range(0, pool.size() - 1)].id})
+	return offers
+
+
+func apply_upgrade(uid: int, upgrade_id: String) -> void:
+	var m := member(uid)
+	if not m.is_empty() and not upgrade_id in m.upgrades:
+		m.upgrades.append(upgrade_id)
+
+
+func upgrade_price() -> int:
+	return 55
+
+
+func team_traits() -> Dictionary:
+	return Data.active_traits(fighters().slice(0, MAX_PARTY).map(func(m): return m.species))
+
+
 # --- Battles --------------------------------------------------------------------------------
 func ally_specs() -> Array:
 	var out: Array = []
 	var team := fighters().slice(0, MAX_PARTY)
 	var leader: Dictionary = Data.SPECIES[team[0].species].leader if not team.is_empty() else {}
 	var hp_mult := 1.2 if "thick_body" in relics else 1.0
+	var traits := team_traits()
 	for m in team:
-		var st := Data.compute_stats(m.species, int(m.level), int(m.mends), hp_mult, leader)
+		var st := Data.compute_stats(m.species, int(m.level), int(m.mends), hp_mult, leader, m.upgrades, traits)
 		if "crit_glaze" in relics:
 			st.crit_rate = minf(100.0, st.crit_rate + 15.0)
 		out.append({"species": m.species, "level": m.level, "stats": st, "hp": st.hp * float(m.hp),
-			"mends": m.mends, "scars": m.scars, "uid": m.uid})
+			"mends": m.mends, "scars": m.scars, "uid": m.uid, "upgrades": m.upgrades})
 	return out
 
 
+## Enemies scale by level, toughness (+5% per row) and, deeper in, their own upgrades.
 func enemy_specs(row: int, kind: String) -> Array:
 	var out: Array = []
 	var pool: Array = Data.SPECIES_ORDER.duplicate()
 	_shuffle(pool)
 	if kind == "boss":
+		var team := [pool[0], pool[1]]
+		var traits := Data.active_traits(team)
+		out.append(_enemy(pool[0], 8, 1.0, 8, traits))
 		var st := Data.compute_stats("boss", 10, 0, 3.0)
-		out.append({"species": pool[0], "level": 8, "stats": Data.compute_stats(pool[0], 8)})
 		out.append({"species": "boss", "level": 10, "stats": st, "boss": true})
-		out.append({"species": pool[1], "level": 8, "stats": Data.compute_stats(pool[1], 8)})
+		out.append(_enemy(pool[1], 8, 1.0, 8, traits))
 		return out
 	var elite := kind == "elite"
 	var count := 3 if (row <= 4 or elite) else 4
 	var lvl := Data.enemy_level(row, elite)
+	var traits := Data.active_traits(pool.slice(0, count))
 	for i in count:
 		var hp_mult := 1.7 if (elite and i == 1) else (0.8 if row <= 1 else 1.0)
-		out.append({"species": pool[i], "level": lvl, "stats": Data.compute_stats(pool[i], lvl, 0, hp_mult), "boss": elite and i == 1})
+		var e := _enemy(pool[i], lvl, hp_mult, row, traits)
+		if elite and i == 1:
+			e.boss = true
+			e.stats.toughness = roundf(e.stats.toughness * 1.4)
+		out.append(e)
 	return out
+
+
+func _enemy(sid: String, lvl: int, hp_mult: float, row: int, traits: Dictionary) -> Dictionary:
+	var ups: Array = []
+	var all_ups: Array = Data.SPECIES[sid].upgrades.map(func(u): return u.id)
+	_shuffle(all_ups)
+	ups = all_ups.slice(0, clampi(row / 3, 0, all_ups.size()))
+	var st := Data.compute_stats(sid, lvl, 0, hp_mult, {}, ups, traits)
+	st.toughness = roundf(st.toughness * (1.0 + 0.05 * row))
+	return {"species": sid, "level": lvl, "stats": st, "upgrades": ups}
 
 
 ## Applies a battle report. Returns {"shattered": [names], "dust": [names], "gold": n}.
 func apply_battle(victory: bool, report: Dictionary, kind: String, row: int) -> Dictionary:
 	stats.battles += 1
-	stats.reactions += int(report.reactions)
+	stats.breaks += int(report.get("breaks", 0))
+	stats.chains += int(report.get("chains", 0))
 	stats.crits += int(report.crits)
 	var res := {"shattered": [], "dust": [], "gold": 0}
 	for a in report.allies:

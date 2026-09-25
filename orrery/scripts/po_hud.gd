@@ -3,7 +3,7 @@ extends CanvasLayer
 ## Three layers of information:
 ##   1. always on screen: icons, bars and numbers only
 ##   2. on hover: skill details, damage preview, status and unit info (tooltip)
-##   3. on demand: rules page (reactions, controls) and the combat log
+##   3. on demand: rules page (Five Phases, crack, chains, traits, controls) and the combat log
 
 const Data = preload("po_data.gd")
 const M = preload("po_mat.gd")
@@ -24,7 +24,7 @@ const ENEMY_COL := Color(1.0, 0.38, 0.42)
 
 var battle: Node
 var root: Control
-var _plates := {}       # unit -> {root, hp, atb, en, status, key}
+var _plates := {}       # unit -> {root, hp, shield, crack, atb, en, status, intent, key}
 var _order_row: HBoxContainer
 var _skill_buttons: Array = []
 var _skill_cd: Array = []
@@ -35,6 +35,8 @@ var _log_panel: PanelContainer
 var _log: RichTextLabel
 var _floor_label: Label
 var _relic_row: HBoxContainer
+var _trait_row: HBoxContainer
+var _enemy_trait_row: HBoxContainer
 var _auto_btn: Button
 var _speed_btn: Button
 var _rules: PanelContainer
@@ -176,7 +178,17 @@ func _build_top() -> void:
 	_relic_row = HBoxContainer.new()
 	_relic_row.add_theme_constant_override("separation", 4)
 	left.add_child(_relic_row)
+	_trait_row = HBoxContainer.new()
+	_trait_row.add_theme_constant_override("separation", 4)
+	left.add_child(_trait_row)
 	root.add_child(left)
+	_enemy_trait_row = HBoxContainer.new()
+	_enemy_trait_row.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_enemy_trait_row.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_enemy_trait_row.offset_right = -18
+	_enemy_trait_row.offset_top = 70
+	_enemy_trait_row.add_theme_constant_override("separation", 4)
+	root.add_child(_enemy_trait_row)
 
 	var order_panel := PanelContainer.new()
 	order_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -294,7 +306,7 @@ func _build_log() -> void:
 	root.add_child(_log_panel)
 
 
-## Rules page: Element Fission table, affinity wheel, status icons and controls.
+## Rules page: Five Phases wheel, crack & break, chains, intents, statuses and controls.
 func _build_rules() -> void:
 	_rules = PanelContainer.new()
 	_rules.set_anchors_preset(Control.PRESET_CENTER)
@@ -304,33 +316,56 @@ func _build_rules() -> void:
 	var t := RichTextLabel.new()
 	t.bbcode_enabled = true
 	t.fit_content = true
-	t.custom_minimum_size = Vector2(620, 0)
+	t.custom_minimum_size = Vector2(700, 0)
 	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	t.add_theme_font_size_override("normal_font_size", 15)
-	var c := func(e: int) -> String:
-		return "[color=#%s]%s[/color]" % [Data.ELEMENT_COLORS[e].to_html(false), I18n.element(e)]
-	t.append_text("[color=#e6b35f][b]%s[/b][/color]\n%s\n" % [I18n.s("fission_title"), I18n.s("fission_intro")])
-	var rows := [[[0, 2], "wildfire"], [[0, 1], "steam"], [[1, 2], "frost"], [[3, 4], "annihilate"], [[3, -1], "radiance"], [[4, -1], "corrode"]]
-	for r in rows:
-		var info: Dictionary = Data.REACTIONS[r[1]]
-		var pair: String = c.call(r[0][0]) + "+" + (c.call(r[0][1]) if r[0][1] >= 0 else I18n.s("fission_other"))
-		t.append_text("• %s → [b]%s[/b] %s\n" % [pair, I18n.f(info, "name"), I18n.f(info, "desc")])
-	t.append_text(I18n.s("affinity_line", [c.call(0), c.call(2), c.call(1), c.call(0), c.call(3), c.call(4)]))
-	t.append_text("\n\n[color=#e6b35f][b]%s[/b][/color]\n" % I18n.s("statuses"))
-	for id in Data.STATUS:
-		var info: Dictionary = Data.STATUS[id]
-		t.add_image(Icons.status(id, info.color, 44), 22, 22)
-		t.append_text(" [color=#%s]%s[/color]   " % [info.color.to_html(false), I18n.f(info, "name")])
-	t.append_text("\n\n[color=#e6b35f][b]%s[/b][/color]\n%s" % [I18n.s("controls"), I18n.s("battle_hint")])
+	_rules_text(t)
 	_rules.add_child(t)
 	_rules.visible = false
 	root.add_child(_rules)
 
 
+static func element_bb(e: int) -> String:
+	return "[color=#%s]%s[/color]" % [Data.ELEMENT_COLORS[e].to_html(false), I18n.element(e)]
+
+
+## Shared by the battle rules page and the title-screen guide.
+static func _rules_text(t: RichTextLabel) -> void:
+	var E := Data.Element
+	t.append_text("[color=#e6b35f][b]%s[/b][/color]\n" % I18n.s("rules_wuxing_title"))
+	for e in 5:
+		t.add_image(Icons.element(e, 40), 20, 20)
+		t.append_text(" %s %s   " % [element_bb(e), Data.ELEMENT_CRAFT[e].en if I18n.en() else Data.ELEMENT_CRAFT[e].zh])
+		if e == 2:
+			t.append_text("\n")
+	t.append_text("\n" + I18n.s("rules_ke", [element_bb(E.METAL), element_bb(E.WOOD), element_bb(E.EARTH), element_bb(E.WATER), element_bb(E.FIRE)]))
+	t.append_text("\n" + I18n.s("rules_sheng", [element_bb(E.WOOD), element_bb(E.FIRE), element_bb(E.EARTH), element_bb(E.METAL), element_bb(E.WATER)]))
+	t.append_text("\n\n[color=#e6b35f][b]%s[/b][/color]\n%s\n" % [I18n.s("rules_crack_title"), I18n.s("rules_crack")])
+	for e in 5:
+		var be: Dictionary = Data.BREAK_EFFECTS[e]
+		t.append_text("  %s [b]%s[/b] %s\n" % [element_bb(e), I18n.f(be, "name"), I18n.f(be, "desc")])
+	t.append_text("\n[color=#e6b35f][b]%s[/b][/color]\n%s\n" % [I18n.s("rules_chain_title"), I18n.s("rules_chain")])
+	t.append_text("\n[color=#e6b35f][b]%s[/b][/color]\n%s\n" % [I18n.s("rules_intent_title"), I18n.s("rules_intent")])
+	t.append_text("\n[color=#e6b35f][b]%s[/b][/color]\n" % I18n.s("statuses"))
+	for id in Data.STATUS:
+		var info: Dictionary = Data.STATUS[id]
+		t.add_image(Icons.status(id, info.color, 44), 22, 22)
+		t.append_text(" [color=#%s]%s[/color]  " % [info.color.to_html(false), I18n.f(info, "name")])
+	t.append_text("\n\n[color=#e6b35f][b]%s[/b][/color]\n%s" % [I18n.s("controls"), I18n.s("battle_hint")])
+
+
 # --- Nameplates ------------------------------------------------------------------------------
-func setup_units(units: Array, relics: Array, floor_text: String = "") -> void:
+func setup_units(units: Array, relics: Array, floor_text: String = "", traits: Array = [{}, {}]) -> void:
 	clear_units()
 	_floor_label.text = floor_text
+	for row in [_trait_row, _enemy_trait_row]:
+		for c in row.get_children():
+			c.queue_free()
+	for team in 2:
+		for tid in Data.TRAIT_ORDER:
+			if traits[team].has(tid):
+				var ic := trait_icon(tid, int(traits[team][tid]), 30, team == 1)
+				(_trait_row if team == 0 else _enemy_trait_row).add_child(ic)
 	for c in _relic_row.get_children():
 		c.queue_free()
 	for r in relics:
@@ -341,6 +376,31 @@ func setup_units(units: Array, relics: Array, floor_text: String = "") -> void:
 		_relic_row.add_child(ic)
 	for u in units:
 		_make_plate(u)
+
+
+## Trait badge: glyph on a disc, tier pips, tooltip with every tier.
+func trait_icon(tid: String, tier: int, size: float, enemy: bool = false) -> Control:
+	var col := Color(0.55, 0.2, 0.22) if enemy else Color(0.42, 0.3, 0.12)
+	var holder := Control.new()
+	holder.custom_minimum_size = Vector2(size, size)
+	holder.mouse_filter = Control.MOUSE_FILTER_STOP
+	holder.add_child(_icon(Icons.tex(Icons.TRAIT_ICON.get(tid, "ring"), col, 48), size))
+	var n := _label("%d" % (tier + 1), 11, Color(1.0, 0.85, 0.45))
+	n.position = Vector2(size - 9, size - 14)
+	n.add_theme_constant_override("outline_size", 4)
+	holder.add_child(n)
+	_hover(holder, func(): return trait_tip(tid, tier))
+	return holder
+
+
+static func trait_tip(tid: String, tier: int) -> String:
+	var info: Dictionary = Data.TRAITS[tid]
+	var t := "[color=#e6b35f][b]%s[/b][/color]" % I18n.f(info, "name")
+	var descs: Array = info.desc_en if I18n.en() else info.desc
+	for i in info.tiers.size():
+		var on: bool = i <= tier
+		t += "\n[color=#%s](%d) %s[/color]" % ["ffe6a0" if on else "777788", int(info.tiers[i]), descs[i]]
+	return t
 
 
 func clear_units() -> void:
@@ -364,8 +424,15 @@ func _make_plate(u: Node) -> void:
 		top.add_child(_icon(Icons.tex("seam", Color(0, 0, 0, 0), 32, "#ffc850"), 12))
 	var hp := _bar(Color(0.35, 0.95, 0.5) if u.team == 0 else ENEMY_COL, 9)
 	hp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# gold shield overlays the HP bar
+	var shield := _bar(Color(1.0, 0.8, 0.3, 0.85), 9, Color(0, 0, 0, 0))
+	shield.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hp.add_child(shield)
 	top.add_child(hp)
 	box.add_child(top)
+	# crack gauge (裂纹): fills toward toughness; flashes when broken
+	var crack := _bar(Color(0.95, 0.93, 0.85), 4, Color(0.12, 0.1, 0.16, 0.9))
+	box.add_child(crack)
 	var atb := _bar(Color(0.55, 0.85, 1.0), 3)
 	box.add_child(atb)
 	var en := _bar(Color(1.0, 0.75, 0.3), 3)
@@ -375,9 +442,15 @@ func _make_plate(u: Node) -> void:
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	status.custom_minimum_size = Vector2(0, 20)
 	box.add_child(status)
+	# enemy intent: what it will do next, and to whom
+	var intent := HBoxContainer.new()
+	intent.add_theme_constant_override("separation", 2)
+	intent.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(intent)
+	box.move_child(intent, 0)
 	root.add_child(box)
 	root.move_child(box, 0)
-	_plates[u] = {"root": box, "hp": hp, "atb": atb, "en": en, "status": status, "key": ""}
+	_plates[u] = {"root": box, "hp": hp, "shield": shield, "crack": crack, "atb": atb, "en": en, "status": status, "intent": intent, "key": "", "ikey": ""}
 
 
 func update_units(cam: Camera3D) -> void:
@@ -393,20 +466,55 @@ func update_units(cam: Camera3D) -> void:
 		box.visible = true
 		box.position = cam.unproject_position(world) - Vector2(59, box.size.y)
 		p.hp.value = u.hp_ratio() * 100.0
+		p.shield.value = u.shield / u.max_hp * 100.0
+		p.crack.value = u.crack_ratio() * 100.0
+		var crack_fill: StyleBoxFlat = p.crack.get_theme_stylebox("fill")
+		if u.broken:
+			crack_fill.bg_color = Color(1.0, 0.35, 0.3).lerp(Color(1, 0.85, 0.4), 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.012))
+		else:
+			crack_fill.bg_color = Color(0.95, 0.93, 0.85).lerp(Color(1.0, 0.55, 0.3), u.crack_ratio())
 		p.atb.value = minf(u.atb, 100.0)
 		p.en.value = u.energy / u.ult_cost * 100.0
-		var key := "%d|%s|%s" % [u.mark, str(u.statuses), u.ultimate_ready()]
+		var key := "%s|%s|%s" % [u.broken, str(u.statuses), u.ultimate_ready()]
 		if key != p.key:
 			p.key = key
 			_fill_status(p.status, u)
+		var it: Dictionary = u.intent
+		var ikey := "" if it.is_empty() else "%d|%s" % [int(it.skill), str(it.target.get_instance_id()) if is_instance_valid(it.target) else ""]
+		if ikey != p.ikey:
+			p.ikey = ikey
+			_fill_intent(p.intent, u)
 
 
-## Status row: element mark first, then one icon per status with its turns as a badge.
+## Intent row above an enemy plate: skill-kind icon (+ target portrait for single-target moves).
+func _fill_intent(row: HBoxContainer, u: Node) -> void:
+	for c in row.get_children():
+		c.queue_free()
+	var it: Dictionary = u.intent
+	if it.is_empty():
+		return
+	var i := int(it.skill)
+	var sk: Dictionary = u.skills[i]
+	var glyph := "intent_attack"
+	if i == 2:
+		glyph = "ult"
+	elif sk.target == "all_enemies":
+		glyph = "intent_aoe"
+	elif sk.target == "all_allies":
+		glyph = "intent_buff"
+	var col := Color(0.7, 0.15, 0.15) if i > 0 else Color(0.3, 0.12, 0.14)
+	row.add_child(_icon(Icons.tex(glyph, col, 48, "#ffe6c0"), 26 if i > 0 else 20))
+	if sk.target == "enemy" and is_instance_valid(it.target):
+		row.add_child(_icon(Icons.tex("speed", Color(0, 0, 0, 0), 32, "#ffb0a0"), 12))
+		row.add_child(_icon(Icons.portrait(it.target.species_id, it.target.element, 48), 22))
+
+
+## Status row: broken / shield first, then one icon per status with its turns as a badge.
 func _fill_status(row: HBoxContainer, u: Node) -> void:
 	for c in row.get_children():
 		c.queue_free()
-	if u.mark >= 0:
-		row.add_child(_icon(Icons.tex(Icons.ELEMENT_ICON[u.mark], Data.ELEMENT_COLORS[u.mark].darkened(0.2), 40), 20))
+	if u.broken:
+		row.add_child(_icon(Icons.tex("broken", Color(0.7, 0.2, 0.15), 40), 20))
 	for s in u.statuses:
 		var info: Dictionary = Data.STATUS[s.id]
 		var holder := Control.new()
@@ -426,19 +534,27 @@ func _fill_status(row: HBoxContainer, u: Node) -> void:
 func unit_tip(u: Node) -> String:
 	var t := "[color=#%s][b]%s[/b][/color]  Lv%d" % [Data.ELEMENT_COLORS[u.element].to_html(false), u.display_name, u.level]
 	t += "\n%d / %d" % [int(u.hp), int(u.max_hp)]
-	if u.mark >= 0:
-		t += "\n[color=#%s]%s[/color]" % [Data.ELEMENT_COLORS[u.mark].to_html(false), I18n.s("mark", [I18n.element(u.mark)])]
+	if u.shield > 0.0:
+		t += "  [color=#ffd060]+%d[/color]" % int(u.shield)
+	t += "\n" + (I18n.s("tip_broken") if u.broken else I18n.s("tip_crack", [int(u.crack), int(u.toughness)]))
+	if not u.intent.is_empty():
+		var sk: Dictionary = u.skills[int(u.intent.skill)]
+		var tgt: String = u.intent.target.display_name if (sk.target == "enemy" and is_instance_valid(u.intent.target)) else I18n.s("target_" + String(sk.target))
+		t += "\n" + I18n.s("tip_intent", [I18n.f(sk, "name"), tgt])
 	for s in u.statuses:
 		var info: Dictionary = Data.STATUS[s.id]
 		t += "\n[color=#%s]%s[/color] ×%d" % [info.color.to_html(false), I18n.f(info, "name"), s.turns]
 	for sc in u.scars:
 		t += "\n[color=#ffc860]◆ %s[/color] %s" % [I18n.f(Data.SCARS[sc], "name"), I18n.f(Data.SCARS[sc], "desc")]
 	t += "\n[color=#8fb8ff]%s[/color] %s" % [I18n.f(u.species.passive, "name"), I18n.f(u.species.passive, "desc")]
+	for uid in u.upgrades:
+		t += "\n[color=#ffc860]✦ %s[/color]" % I18n.f(Data.upgrade_info(u.species_id, uid), "name")
 	return t
 
 
 # --- Turn order ----------------------------------------------------------------------------
-func update_turn_order(order: Array) -> void:
+## Forecast of the next actors; a gold link badge marks actions that will be 相生 chain links.
+func update_turn_order(order: Array, chains: Array = []) -> void:
 	for c in _order_row.get_children():
 		c.queue_free()
 	for i in order.size():
@@ -447,8 +563,23 @@ func update_turn_order(order: Array) -> void:
 		var holder := PanelContainer.new()
 		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var border := ALLY_COL if u.team == 0 else ENEMY_COL
-		holder.add_theme_stylebox_override("panel", _sb(Color(0, 0, 0, 0), border, 3 if i == 0 else 2, int(size / 2.0) + 3, 1))
-		holder.add_child(_icon(Icons.portrait(u.species_id, u.element, 64), size))
+		var link: int = int(chains[i]) if i < chains.size() else 0
+		if link > 0:
+			border = Color(1.0, 0.82, 0.35)
+		holder.add_theme_stylebox_override("panel", _sb(Color(0, 0, 0, 0), border, 3 if (i == 0 or link > 0) else 2, int(size / 2.0) + 3, 1))
+		var inner := Control.new()
+		inner.custom_minimum_size = Vector2(size, size)
+		inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.add_child(_icon(Icons.portrait(u.species_id, u.element, 64), size))
+		if link > 0:
+			var badge := _icon(Icons.tex("chain", Color(0.45, 0.3, 0.05), 32), 16)
+			badge.position = Vector2(size - 14, -4)
+			inner.add_child(badge)
+			var n := _label(str(link), 11, Color(1.0, 0.9, 0.5))
+			n.position = Vector2(size - 10, size - 14)
+			n.add_theme_constant_override("outline_size", 4)
+			inner.add_child(n)
+		holder.add_child(inner)
 		_order_row.add_child(holder)
 
 

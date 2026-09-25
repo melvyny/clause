@@ -13,14 +13,15 @@ extends RefCounted
 const M = preload("po_mat.gd")
 const Data = preload("po_data.gd")
 
-## Plinth glaze per element, after the great kilns: Jun red, Ru sky-blue,
-## Longquan celadon, Ding ivory, Jian black.
+## Plinth glaze per Five-Phase element (金木水火土), after the great kilns:
+## Ding ivory with gilding, Longquan celadon, Ru sky-blue, Jun copper red,
+## and the brown-black of a Jian / Cizhou stoneware body.
 const GLAZES := [
-	Color(0.62, 0.12, 0.14),
-	Color(0.52, 0.7, 0.74),
-	Color(0.42, 0.62, 0.5),
 	Color(0.93, 0.88, 0.74),
-	Color(0.07, 0.05, 0.05),
+	Color(0.42, 0.62, 0.5),
+	Color(0.52, 0.7, 0.74),
+	Color(0.62, 0.12, 0.14),
+	Color(0.36, 0.22, 0.14),
 ]
 const WHITE := Color(0.96, 0.95, 0.91)
 const IVORY := Color(0.94, 0.9, 0.78)

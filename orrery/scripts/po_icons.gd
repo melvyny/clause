@@ -14,6 +14,18 @@ const GLYPHS := {
 	# elements
 	"fire": "<path fill='{F}' d='M32 5C40 19 51 26 48 41C46 53 38 59 32 59C24 59 15 53 16 40C17 30 24 26 26 15C30 23 33 25 32 5Z'/><path fill='{D}' opacity='.35' d='M32 32C36 38 40 42 38 48C37 53 34 55 32 55C28 55 25 52 26 46C27 41 31 39 32 32Z'/>",
 	"water": "<path fill='{F}' d='M32 5C42 21 50 31 50 42A18 18 0 0 1 14 42C14 31 22 21 32 5Z'/><path fill='none' stroke='{D}' stroke-opacity='.35' stroke-width='4' stroke-linecap='round' d='M22 42A10 10 0 0 0 30 51'/>",
+	"metal": "<circle cx='32' cy='32' r='26' fill='{F}'/><rect x='24' y='24' width='16' height='16' fill='{D}' opacity='.45'/><circle cx='32' cy='32' r='20' fill='none' stroke='{D}' stroke-opacity='.3' stroke-width='3'/>",
+	"wood": "<path fill='{F}' d='M32 4C50 14 56 34 44 50C40 55 36 57 32 58C28 57 24 55 20 50C8 34 14 14 32 4Z'/><path fill='none' stroke='{D}' stroke-opacity='.4' stroke-width='3.5' stroke-linecap='round' d='M32 14V60M32 28L22 22M32 28L42 22M32 40L20 33M32 40L44 33'/>",
+	"earth": "<path fill='{F}' d='M4 50L22 18L32 32L42 14L60 50Z'/><rect x='4' y='50' width='56' height='8' fill='{F}'/><path fill='{D}' opacity='.35' d='M22 18L28 27L20 32ZM42 14L48 26L40 30Z'/>",
+	"slow": "<path fill='{F}' d='M18 6H46V12C46 22 36 28 36 32C36 36 46 42 46 52V58H18V52C18 42 28 36 28 32C28 28 18 22 18 12Z'/><path fill='{D}' opacity='.45' d='M24 52C26 46 30 44 32 44C34 44 38 46 40 52Z'/>",
+	"broken": "<path fill='{F}' d='M8 14L28 8L24 26L34 34L22 58L8 46Z'/><path fill='{F}' d='M34 6L56 12L58 44L40 58L44 36L32 26Z'/>",
+	"shield": "<path fill='{F}' d='M32 5L55 13V30C55 45 45 55 32 59C19 55 9 45 9 30V13Z'/><path fill='none' stroke='{D}' stroke-opacity='.5' stroke-width='3.5' stroke-linejoin='round' d='M26 12L32 26L24 36L34 52'/>",
+	"crack": "<path fill='none' stroke='{F}' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' d='M32 4L26 22L38 30L24 44L30 60M38 30L54 34M26 22L10 18'/>",
+	"chain": "<g fill='none' stroke='{F}' stroke-width='6'><ellipse cx='22' cy='32' rx='14' ry='10'/><ellipse cx='42' cy='32' rx='14' ry='10'/></g>",
+	"intent_attack": "<path fill='{F}' d='M10 54L40 10L50 16L22 58Z'/><path fill='{F}' d='M36 6L58 6L58 28Z'/>",
+	"intent_aoe": "<g fill='{F}'><path d='M6 54L22 20L28 24L14 58Z'/><path d='M24 58L40 10L47 13L33 60Z'/><path d='M44 58L52 22L58 24L52 60Z'/></g>",
+	"intent_buff": "<g fill='{F}'><path d='M32 6L54 28H42L32 18L22 28H10Z'/><path d='M32 28L54 50H42L32 40L22 50H10Z'/></g>",
+	"brush": "<path fill='{F}' d='M44 4L56 16L30 42L22 34Z'/><path fill='{F}' d='M20 36L28 44C26 54 16 60 6 58C10 54 8 44 20 36Z'/>",
 	"wind": "<g fill='none' stroke='{F}' stroke-width='6' stroke-linecap='round'><path d='M6 22H38A8 8 0 1 0 30 14'/><path d='M6 34H48A8 8 0 1 1 40 42'/><path d='M6 46H28'/></g>",
 	"light": "<circle cx='32' cy='32' r='11' fill='{F}'/><g stroke='{F}' stroke-width='5' stroke-linecap='round'><path d='M32 6V14M32 50V58M6 32H14M50 32H58M13 13L19 19M45 45L51 51M13 51L19 45M45 19L51 13'/></g>",
 	"dark": "<path fill='{F}' d='M40 6A26 26 0 1 0 58 44A19 19 0 1 1 40 6Z'/><circle cx='48' cy='16' r='3' fill='{F}'/>",
@@ -55,8 +67,12 @@ const GLYPHS := {
 	"boss": "<path fill='{F}' d='M22 12H42V16C56 24 56 44 46 56H18C8 44 8 24 22 16Z'/><path fill='none' stroke='{D}' stroke-width='3.5' stroke-linejoin='round' d='M30 12L26 26L36 32L28 44L34 56'/><g fill='{D}'><circle cx='24' cy='30' r='3'/><circle cx='40' cy='30' r='3'/></g>",
 }
 
-const STATUS_ICON := {"atk_up": "atk_up", "def_up": "def_up", "immunity": "immunity", "def_break": "def_break", "dot": "dot", "stun": "stun", "freeze": "freeze"}
-const ELEMENT_ICON := ["fire", "water", "wind", "light", "dark"]
+const STATUS_ICON := {"atk_up": "atk_up", "def_up": "def_up", "immunity": "immunity", "def_break": "def_break", "dot": "dot", "stun": "stun", "freeze": "freeze", "slow": "slow"}
+const ELEMENT_ICON := ["metal", "wood", "water", "fire", "earth"]
+## Disc colours per element (金木水火土): gilt, celadon, cobalt, copper red, clay.
+const ELEMENT_HEX := ["b8902c", "3f8a5a", "2f68b8", "b8452c", "8a5a32"]
+## Trait icons reuse glyphs.
+const TRAIT_ICON := {"song": "rulotus", "painted": "brush", "mono": "ring", "wuxing": "burst", "tang": "sancaihorse", "ming": "chickencup", "qing": "generaljar"}
 
 
 ## Rasterised icon. With `bg` set, the glyph sits on a glazed disc with a gold rim.
@@ -85,8 +101,7 @@ static func tex(icon_name: String, bg: Color = Color(0, 0, 0, 0), size: int = 64
 
 
 static func element(e: int, size: int = 64, disc: bool = true) -> Texture2D:
-	const COLORS := ["b8452c", "2f78b8", "3f9a6a", "c9a13f", "6b3fa8"]
-	return tex(ELEMENT_ICON[e], Color.html(COLORS[e]) if disc else Color(0, 0, 0, 0), size)
+	return tex(ELEMENT_ICON[e], Color.html(ELEMENT_HEX[e]) if disc else Color(0, 0, 0, 0), size)
 
 
 static func status(id: String, color: Color, size: int = 40) -> Texture2D:
@@ -111,5 +126,4 @@ static func skill_kind(sk: Dictionary, index: int) -> String:
 
 
 static func portrait(species_id: String, element_index: int, size: int = 64) -> Texture2D:
-	const COLORS := ["b8452c", "2f78b8", "3f9a6a", "c9a13f", "6b3fa8"]
-	return tex(species_id if GLYPHS.has(species_id) else "shard", Color.html(COLORS[element_index]), size)
+	return tex(species_id if GLYPHS.has(species_id) else "shard", Color.html(ELEMENT_HEX[element_index]), size)

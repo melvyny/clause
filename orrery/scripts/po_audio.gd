@@ -31,7 +31,8 @@ func play(sfx: String, volume_db: float = 0.0, pitch: float = 1.0) -> void:
 
 
 func element_sfx(element: int) -> String:
-	return ["fire", "water", "wind", "light", "dark"][element]
+	# 金 chime, 木 rustle, 水 splash, 火 roar, 土 low rumble
+	return ["light", "wind", "water", "fire", "dark"][element]
 
 
 # --- Synthesis ---------------------------------------------------------------------

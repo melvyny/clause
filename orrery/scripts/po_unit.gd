@@ -25,8 +25,14 @@ var alive := true
 var skills: Array = []
 var energy := 0.0
 var ult_cost := 100.0
-var mark := -1               # element Mark left by the last attacker (Element Fission)
-var mark_turns := 0
+var upgrades: Array = []     # upgrade ids (see Data.SPECIES[..].upgrades)
+var toughness := 100.0       # 胎厚: crack needed to break this figure
+var crack := 0.0             # 裂纹: builds up from hits, heals mend it
+var broken := false          # 崩裂: vulnerable until its next turn starts
+var shield := 0.0            # 金釉护盾: absorbs damage before HP
+var intent: Dictionary = {}  # enemies telegraph their next action: {skill, target}
+var chain := 0               # 相生 links of this unit's current action
+var passive_value := 0.0
 var is_boss := false
 var uid := -1                # run creature id (allies only)
 var mends := 0               # gold seams from previous repairs
@@ -65,8 +71,10 @@ func setup(p_species: String, p_team: int, p_level: int, p_stats: Dictionary, na
 	stats = p_stats
 	max_hp = float(stats.hp)
 	hp = max_hp
-	skills = species.skills
+	skills = Data.build_skills(p_species, upgrades)
+	toughness = float(stats.get("toughness", 100.0))
 	passive_id = species.passive.id
+	passive_value = Data.passive_value(p_species, upgrades, 10.0)
 	energy = Data.ENERGY_START
 	name = "%s_%s" % ["Ally" if team == 0 else "Enemy", p_species]
 
@@ -150,7 +158,10 @@ func _process(delta: float) -> void:
 		if _bob_paused.has(node):
 			continue
 		node.position.y = _base_positions[node].y + sin(_time * entry[2] + entry[3]) * entry[1]
-	var dmg := 1.0 - hp_ratio() if alive else 1.0
+	# the kintsugi seams glow as HP drops, and the glaze visibly cracks as crack builds
+	var dmg := maxf(1.0 - hp_ratio(), crack_ratio() * 0.85) if alive else 1.0
+	if broken and alive:
+		dmg = 1.0
 	if absf(dmg - _shown_damage) > 0.002:
 		_shown_damage = lerpf(_shown_damage, dmg, minf(1.0, delta * 4.0))
 		for m in _porcelain:
@@ -221,7 +232,11 @@ func eff_def() -> float:
 
 
 func eff_spd() -> float:
-	return float(stats.spd)
+	return float(stats.spd) * (1.0 - (Data.SLOW if has_status("slow") else 0.0))
+
+
+func crack_ratio() -> float:
+	return 1.0 if broken else clampf(crack / maxf(toughness, 1.0), 0.0, 1.0)
 
 
 func hp_ratio() -> float:
@@ -277,10 +292,6 @@ func tick_statuses() -> void:
 	for s in statuses:
 		s.turns -= 1
 	statuses = statuses.filter(func(s): return s.turns > 0)
-	if mark >= 0:
-		mark_turns -= 1
-		if mark_turns <= 0:
-			mark = -1
 
 
 func gain_energy(amount: float) -> void:
