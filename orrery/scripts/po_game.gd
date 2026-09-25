@@ -19,6 +19,8 @@ const HUD = preload("po_hud.gd")
 const Audio = preload("po_audio.gd")
 const Console = preload("po_console.gd")
 const Codex = preload("po_codex.gd")
+const Icons = preload("po_icons.gd")
+const Tip = preload("po_tip.gd")
 
 const BRASS := Color(0.9, 0.7, 0.38)
 const IVORY := Color(0.96, 0.94, 0.88)
@@ -38,6 +40,7 @@ var _busy := false
 var _screen: Callable
 var _autotest := false
 var _args: PackedStringArray
+var tip: Tip
 
 
 func _ready() -> void:
@@ -59,6 +62,11 @@ func _ready() -> void:
 	console = Console.new()
 	console.game = self
 	add_child(console)
+	var tip_layer := CanvasLayer.new()
+	tip_layer.layer = 30
+	add_child(tip_layer)
+	tip = Tip.new()
+	tip_layer.add_child(tip)
 	if _autotest:
 		audio.muted = true
 		auto_battle = true
@@ -131,6 +139,8 @@ func _clear_world() -> void:
 
 
 func _clear_ui() -> void:
+	if tip:
+		tip.hide_for()
 	if ui:
 		ui.queue_free()
 	ui = Control.new()
@@ -150,6 +160,7 @@ func _show_map_bg(interactive: bool) -> void:
 	map.interactive = interactive
 	world.add_child(map)
 	map.node_chosen.connect(_on_node_chosen)
+	map.node_hovered.connect(_on_node_hovered)
 
 
 func _fade_in() -> void:
@@ -223,14 +234,21 @@ func _button(text: String, cb: Callable, min_w: float = 180.0) -> Button:
 
 
 ## A clickable card with rich text and a coloured border.
-func _card(bbcode: String, border: Color, cb: Callable, size: Vector2 = Vector2(300, 250)) -> Button:
+func _card(bbcode: String, border: Color, cb: Callable, size: Vector2 = Vector2(300, 250), images: Array = [], img_size: int = 72) -> Button:
 	var b := Button.new()
 	b.custom_minimum_size = size
 	b.focus_mode = Control.FOCUS_NONE
 	b.add_theme_stylebox_override("normal", HUD._sb(Color(0.05, 0.05, 0.13, 0.95), border.darkened(0.2), 2, 12, 14))
 	b.add_theme_stylebox_override("hover", HUD._sb(Color(0.12, 0.1, 0.24, 0.98), border.lightened(0.2), 3, 12, 14))
 	b.add_theme_stylebox_override("pressed", HUD._sb(Color(0.2, 0.15, 0.08, 0.98), BRASS, 3, 12, 14))
-	var r := _rich(bbcode, 15)
+	var r := _rich("", 15)
+	if not images.is_empty():
+		r.push_paragraph(HORIZONTAL_ALIGNMENT_CENTER)
+		for im in images:
+			r.add_image(im, img_size, img_size)
+			r.add_text(" ")
+		r.pop()
+	r.append_text(bbcode)
 	r.set_anchors_preset(Control.PRESET_FULL_RECT)
 	r.offset_left = 16
 	r.offset_right = -16
@@ -264,89 +282,134 @@ func _hex(c: Color) -> String:
 func _creature_bbcode(sid: String, extra: String = "") -> String:
 	var sp: Dictionary = Data.SPECIES[sid]
 	var col: Color = Data.ELEMENT_COLORS[sp.element]
-	var t := "[font_size=22][color=#%s][b]%s[/b][/color][/font_size]\n" % [_hex(col), I18n.f(sp, "name")]
-	t += "[color=#%s]%s[/color] · %s · [color=#aab]%s[/color]\n" % [_hex(col), I18n.element(sp.element), I18n.f(sp, "role"), I18n.f(sp.origin, "era")]
-	t += "[i][color=#ccd]%s[/color][/i]\n" % I18n.f(sp, "lore")
+	var t := "[center][font_size=22][color=#%s][b]%s[/b][/color][/font_size]\n" % [_hex(col), I18n.f(sp, "name")]
+	t += "[color=#%s]%s[/color] · %s[/center]\n" % [_hex(col), I18n.element(sp.element), I18n.f(sp, "role")]
+	t += "[i][color=#ccd]%s[/color][/i]" % I18n.f(sp, "lore")
+	return t + extra
+
+
+## Full detail for hover tips: origin, passive and every skill.
+func _creature_detail(sid: String) -> String:
+	var sp: Dictionary = Data.SPECIES[sid]
+	var o: Dictionary = sp.origin
+	var t := "[color=#%s][b]%s[/b][/color]\n[color=#e6b35f]%s · %s[/color]\n" % [_hex(Data.ELEMENT_COLORS[sp.element]), I18n.f(sp, "name"), I18n.f(o, "era"), I18n.f(o, "piece")]
 	t += "[color=#8fb8ff]%s[/color] %s\n" % [I18n.f(sp.passive, "name"), I18n.f(sp.passive, "desc")]
 	for sk in sp.skills:
-		t += "[color=#e6b35f]•[/color] %s\n" % I18n.f(sk, "name")
-	return t + extra
+		t += "[color=#e6b35f]• %s[/color] %s\n" % [I18n.f(sk, "name"), I18n.f(sk, "desc")]
+	return t.strip_edges()
 
 
 func _relic_bbcode(id: String, extra: String = "") -> String:
 	var r: Dictionary = Data.RELICS[id]
 	var col: Color = Data.RARITY_COLORS[int(r.rarity)]
-	return "[font_size=21][color=#%s][b]◆ %s[/b][/color][/font_size]\n\n%s%s" % [_hex(col), I18n.f(r, "name"), I18n.f(r, "desc"), extra]
+	return "[center][font_size=20][color=#%s][b]%s[/b][/color][/font_size][/center]\n%s%s" % [_hex(col), I18n.f(r, "name"), I18n.f(r, "desc"), extra]
 
 
-## Gold, floor, party and glaze shards across the top of every run screen.
+## Gold, floor, party and glaze shards across the top of every run screen (icons + hover tips).
 func _top_bar() -> void:
+	tip.hide_for()
 	var bar := HBoxContainer.new()
 	bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	bar.offset_left = 16
 	bar.offset_right = -16
 	bar.offset_top = 12
-	bar.add_theme_constant_override("separation", 14)
+	bar.add_theme_constant_override("separation", 12)
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(bar)
 	var left := VBoxContainer.new()
 	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	left.add_child(_label(I18n.s("title_small"), 22, BRASS))
+	var gold_row := HBoxContainer.new()
+	gold_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gold_row.add_child(_icon(Icons.tex("gold", Color(0, 0, 0, 0), 48, "#ffc850"), 26))
+	gold_row.add_child(_label(str(run.gold), 22, Color(1, 0.85, 0.45)))
+	left.add_child(gold_row)
 	var row: int = run.node(run.current).row
-	left.add_child(_label("%s    %s" % [I18n.s("gold", [run.gold]), I18n.s("floor", [row, Run.ROWS - 1])], 17, Color(1, 0.85, 0.45)))
+	left.add_child(_label(I18n.s("floor", [row, Run.ROWS - 1]), 15, IVORY))
 	bar.add_child(left)
 	for m in run.party:
-		var sp: Dictionary = Data.SPECIES[m.species]
-		var col: Color = Data.ELEMENT_COLORS[sp.element]
-		var p := PanelContainer.new()
-		p.custom_minimum_size = Vector2(170, 0)
-		p.mouse_filter = Control.MOUSE_FILTER_PASS
-		p.add_theme_stylebox_override("panel", HUD._sb(Color(0.05, 0.05, 0.12, 0.9), (Color(0.9, 0.3, 0.3) if m.shattered else col.darkened(0.3)), 2, 8, 6))
-		var v := VBoxContainer.new()
-		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		v.add_theme_constant_override("separation", 2)
-		var seams := "◆".repeat(int(m.mends)) + "◇".repeat(Data.MAX_MENDS - int(m.mends))
-		v.add_child(_rich("[color=#%s]%s[/color] %s [color=#9aa]%s[/color]\n[color=#ffc860]%s[/color]" % [
-			_hex(col), I18n.element(sp.element), I18n.f(sp, "name"), I18n.s("lv", [int(m.level)]), seams], 13))
-		var hp := ProgressBar.new()
-		hp.show_percentage = false
-		hp.custom_minimum_size = Vector2(0, 8)
-		hp.value = float(m.hp) * 100.0
-		hp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var fg := StyleBoxFlat.new()
-		fg.bg_color = Color(0.35, 0.95, 0.5)
-		fg.set_corner_radius_all(3)
-		var bg := StyleBoxFlat.new()
-		bg.bg_color = Color(0.1, 0.05, 0.08)
-		bg.set_corner_radius_all(3)
-		hp.add_theme_stylebox_override("fill", fg)
-		hp.add_theme_stylebox_override("background", bg)
-		v.add_child(hp)
-		if m.shattered:
-			v.add_child(_label(I18n.s("shattered"), 13, Color(1, 0.45, 0.45)))
-		var tip := ""
-		for sc in m.scars:
-			tip += "%s — %s\n" % [I18n.f(Data.SCARS[sc], "name"), I18n.f(Data.SCARS[sc], "desc")]
-		p.tooltip_text = tip.strip_edges()
-		p.add_child(v)
-		bar.add_child(p)
+		bar.add_child(_party_card(m))
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.add_child(spacer)
-	var rel := VBoxContainer.new()
-	rel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rel.add_child(_label(I18n.s("relics"), 15, BRASS))
-	var txt := ""
+	var relics := HBoxContainer.new()
+	relics.add_theme_constant_override("separation", 4)
+	relics.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for r in run.relics:
 		var info: Dictionary = Data.RELICS[r]
-		txt += "[hint=%s][color=#%s]◆%s[/color][/hint]  " % [I18n.f(info, "desc"), _hex(Data.RARITY_COLORS[int(info.rarity)]), I18n.f(info, "name")]
-	var rt := _rich(txt if txt != "" else I18n.s("no_relics"), 14, 330)
-	rt.mouse_filter = Control.MOUSE_FILTER_PASS
-	rel.add_child(rt)
-	bar.add_child(rel)
+		var col: Color = Data.RARITY_COLORS[int(info.rarity)]
+		var ic := _icon(Icons.tex("shard", col.darkened(0.45), 48), 34)
+		ic.mouse_filter = Control.MOUSE_FILTER_STOP
+		tip.attach(ic, func(): return "[color=#%s][b]◆ %s[/b][/color]\n%s" % [_hex(col), I18n.f(info, "name"), I18n.f(info, "desc")])
+		relics.add_child(ic)
+	bar.add_child(relics)
 	var lang := _button(I18n.s("lang_btn"), toggle_language, 90)
 	bar.add_child(lang)
+
+
+func _icon(tex: Texture2D, size: float) -> TextureRect:
+	var r := TextureRect.new()
+	r.texture = tex
+	r.custom_minimum_size = Vector2(size, size)
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return r
+
+
+## Compact party card: portrait seal, HP bar and gold-seam pips. Details on hover.
+func _party_card(m: Dictionary) -> Control:
+	var sp: Dictionary = Data.SPECIES[m.species]
+	var card := HBoxContainer.new()
+	card.add_theme_constant_override("separation", 6)
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	var portrait := _icon(Icons.portrait(m.species, sp.element, 96), 50)
+	if m.shattered:
+		portrait.modulate = Color(0.45, 0.4, 0.45)
+	card.add_child(portrait)
+	var v := VBoxContainer.new()
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_theme_constant_override("separation", 3)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	var hp := ProgressBar.new()
+	hp.show_percentage = false
+	hp.custom_minimum_size = Vector2(70, 8)
+	hp.value = float(m.hp) * 100.0
+	hp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var fg := StyleBoxFlat.new()
+	fg.bg_color = Color(0.35, 0.95, 0.5)
+	fg.set_corner_radius_all(3)
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0.1, 0.05, 0.08)
+	bg.set_corner_radius_all(3)
+	hp.add_theme_stylebox_override("fill", fg)
+	hp.add_theme_stylebox_override("background", bg)
+	v.add_child(hp)
+	var seams := HBoxContainer.new()
+	seams.add_theme_constant_override("separation", 2)
+	seams.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for i in Data.MAX_MENDS:
+		var pip := _icon(Icons.tex("seam", Color(0, 0, 0, 0), 32, "#ffc850" if i < int(m.mends) else "#4a4458"), 14)
+		seams.add_child(pip)
+	if m.shattered:
+		seams.add_child(_icon(Icons.tex("def_break", Color(0, 0, 0, 0), 32, "#ff6060"), 14))
+	v.add_child(seams)
+	card.add_child(v)
+	tip.attach(card, _member_tip.bind(m))
+	return card
+
+
+func _member_tip(m: Dictionary) -> String:
+	var sp: Dictionary = Data.SPECIES[m.species]
+	var t := "[color=#%s][b]%s[/b][/color]  Lv%d\n" % [_hex(Data.ELEMENT_COLORS[sp.element]), I18n.f(sp, "name"), int(m.level)]
+	t += "%s · %s · %d%%\n" % [I18n.element(sp.element), I18n.f(sp, "role"), int(float(m.hp) * 100.0)]
+	if m.shattered:
+		t += "[color=#ff7070]%s[/color]\n" % I18n.s("shattered")
+	t += I18n.s("seams", [int(m.mends), Data.MAX_MENDS]) + "\n"
+	for sc in m.scars:
+		t += "[color=#ffc860]◆ %s[/color] %s\n" % [I18n.f(Data.SCARS[sc], "name"), I18n.f(Data.SCARS[sc], "desc")]
+	t += "[color=#8fb8ff]%s[/color] %s" % [I18n.f(sp.passive, "name"), I18n.f(sp.passive, "desc")]
+	return t
 
 
 # --- Title & starters ----------------------------------------------------------------------------
@@ -455,14 +518,24 @@ func show_starters() -> void:
 	h.add_theme_constant_override("separation", 16)
 	for i in Data.STARTERS.size():
 		var st: Dictionary = Data.STARTERS[i]
-		var txt := "[font_size=24][color=#e6b35f][b]%s[/b][/color][/font_size]\n[color=#aab]%s[/color]\n\n" % [I18n.f(st, "name"), I18n.f(st, "desc")]
+		var txt := "[center][font_size=24][color=#e6b35f][b]%s[/b][/color][/font_size]\n[color=#aab]%s[/color][/center]" % [I18n.f(st, "name"), I18n.f(st, "desc")]
+		var imgs: Array = []
 		for sid in st.team:
-			var sp: Dictionary = Data.SPECIES[sid]
-			txt += "[color=#%s]● %s[/color]  %s · %s\n" % [_hex(Data.ELEMENT_COLORS[sp.element]), I18n.f(sp, "name"), I18n.element(sp.element), I18n.f(sp, "role")]
-		h.add_child(_card(txt, BRASS, _start_run.bind(i), Vector2(320, 230)))
+			imgs.append(Icons.portrait(sid, Data.SPECIES[sid].element, 128))
+		var card := _card(txt, BRASS, _start_run.bind(i), Vector2(320, 210), imgs, 76)
+		tip.attach(card, _starter_tip.bind(st))
+		h.add_child(card)
 	v.add_child(h)
 	if _autotest:
 		_start_run.call_deferred(0)
+
+
+func _starter_tip(st: Dictionary) -> String:
+	var t := ""
+	for sid in st.team:
+		var sp: Dictionary = Data.SPECIES[sid]
+		t += "[color=#%s][b]%s[/b][/color] %s · %s\n[i][color=#ccd]%s[/color][/i]\n" % [_hex(Data.ELEMENT_COLORS[sp.element]), I18n.f(sp, "name"), I18n.element(sp.element), I18n.f(sp, "role"), I18n.f(sp, "lore")]
+	return t.strip_edges()
 
 
 func _start_run(i: int) -> void:
@@ -487,17 +560,6 @@ func show_map() -> void:
 	hint.offset_bottom = -20
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ui.add_child(hint)
-	var legend := ""
-	for k in ["battle", "elite", "kiln", "mend", "shop", "event", "boss"]:
-		var info: Dictionary = Data.NODE_TYPES[k]
-		legend += "[color=#%s]%s[/color] %s\n" % [_hex(info.color.lightened(0.3)), I18n.f(info, "glyph"), I18n.f(info, "name")]
-	var lg := _rich(legend, 15)
-	lg.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	lg.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	lg.offset_left = 20
-	lg.offset_bottom = -20
-	lg.custom_minimum_size = Vector2(200, 0)
-	ui.add_child(lg)
 	if _autotest:
 		_autopilot_map.call_deferred()
 
@@ -507,6 +569,19 @@ func _autopilot_map() -> void:
 	var avail: Array = run.available()
 	if not avail.is_empty():
 		_on_node_chosen(avail[run.rng.randi_range(0, avail.size() - 1)])
+
+
+func _on_node_hovered(id: int) -> void:
+	if id < 0 or map == null or map.title_mode:
+		tip.hide_for(map)
+		return
+	var n: Dictionary = run.node(id)
+	var info: Dictionary = Data.NODE_TYPES[n.type]
+	var txt := "[color=#%s][b]%s[/b][/color]" % [_hex(info.color.lightened(0.35)), I18n.f(info, "name")]
+	txt += "\n[color=#9aa]%s[/color]" % I18n.s("node_" + String(n.type))
+	if not id in run.available():
+		txt += "\n[color=#777]%s[/color]" % I18n.s("not_reachable")
+	tip.show_text(txt, map)
 
 
 func _on_node_chosen(id: int) -> void:
@@ -589,7 +664,8 @@ func show_reward(kind: String, res: Dictionary) -> void:
 	h.add_theme_constant_override("separation", 16)
 	var choices: Array = run.relic_choices(3, 1 if kind == "elite" else 0)
 	for r in choices:
-		h.add_child(_card(_relic_bbcode(r), Data.RARITY_COLORS[int(Data.RELICS[r].rarity)], _take_relic.bind(r), Vector2(290, 170)))
+		var rcol: Color = Data.RARITY_COLORS[int(Data.RELICS[r].rarity)]
+		h.add_child(_card(_relic_bbcode(r), rcol, _take_relic.bind(r), Vector2(270, 200), [Icons.tex("shard", rcol.darkened(0.45), 96)], 56))
 	v.add_child(h)
 	var skip := _button(I18n.s("skip"), show_map, 160)
 	skip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -615,12 +691,13 @@ func show_kiln() -> void:
 	_top_bar()
 	var v := _center_panel(1040)
 	v.add_child(_label(I18n.s("kiln_title"), 32, Color(1.0, 0.6, 0.3)))
-	v.add_child(_rich(I18n.s("kiln_text"), 16, 980))
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 16)
 	var choices: Array = run.kiln_choices()
 	for sid in choices:
-		h.add_child(_card(_creature_bbcode(sid), Data.ELEMENT_COLORS[Data.SPECIES[sid].element], _kiln_pick.bind(sid), Vector2(320, 250)))
+		var kc := _card(_creature_bbcode(sid), Data.ELEMENT_COLORS[Data.SPECIES[sid].element], _kiln_pick.bind(sid), Vector2(300, 270), [Icons.portrait(sid, Data.SPECIES[sid].element, 128)], 84)
+		tip.attach(kc, _creature_detail.bind(sid))
+		h.add_child(kc)
 	v.add_child(h)
 	v.add_child(_button(I18n.s("skip"), show_map, 160))
 	if _autotest:
@@ -641,7 +718,9 @@ func _kiln_pick(sid: String) -> void:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 12)
 	for m in run.party:
-		h.add_child(_card(_creature_bbcode(m.species, "\n" + "◆".repeat(int(m.mends))), Color(0.9, 0.4, 0.4), _kiln_replace.bind(sid, int(m.uid)), Vector2(200, 230)))
+		var rc := _card("[center]%s\n[color=#ffc860]%s[/color][/center]" % [run.display_name(m), "◆".repeat(int(m.mends))], Color(0.9, 0.4, 0.4), _kiln_replace.bind(sid, int(m.uid)), Vector2(170, 170), [Icons.portrait(m.species, Data.SPECIES[m.species].element, 128)], 84)
+		tip.attach(rc, _member_tip.bind(m))
+		h.add_child(rc)
 	v.add_child(h)
 	v.add_child(_button(I18n.s("skip"), show_map, 160))
 	if _autotest:
@@ -676,7 +755,10 @@ func show_mend(fresh: bool = true) -> void:
 	v.add_theme_constant_override("separation", 12)
 	panel.add_child(v)
 	v.add_child(_label(I18n.s("mend_title"), 32, Color(1.0, 0.8, 0.4)))
-	v.add_child(_rich(I18n.s("mend_text"), 15, 510))
+	var how := _label(I18n.s("mend_short"), 15, Color(0.8, 0.8, 0.9))
+	how.mouse_filter = Control.MOUSE_FILTER_STOP
+	tip.attach(how, func(): return I18n.s("mend_text"))
+	v.add_child(how)
 	for m in run.party:
 		var sp: Dictionary = Data.SPECIES[m.species]
 		var row := HBoxContainer.new()
@@ -764,7 +846,8 @@ func show_shop(restock: bool = true) -> void:
 		var owned: bool = r in run.relics
 		var price: int = run.relic_price(r)
 		var extra := "\n\n[color=#ffd060]%s[/color]" % (I18n.s("sold") if owned else I18n.s("buy", [price]))
-		var c := _card(_relic_bbcode(r, extra), Data.RARITY_COLORS[int(Data.RELICS[r].rarity)], _buy.bind(r), Vector2(290, 190))
+		var scol: Color = Data.RARITY_COLORS[int(Data.RELICS[r].rarity)]
+		var c := _card(_relic_bbcode(r, extra), scol, _buy.bind(r), Vector2(270, 220), [Icons.tex("shard", scol.darkened(0.45), 96)], 56)
 		c.disabled = owned or run.gold < price
 		h.add_child(c)
 	v.add_child(h)

@@ -73,7 +73,6 @@ func _ready() -> void:
 	hud.battle = self
 	add_child(hud)
 	hud.skill_pressed.connect(_on_skill_pressed)
-	hud.portrait_pressed.connect(func(u): _try_target(u))
 	if game:
 		hud.auto_toggled.connect(func(): game.set_auto(not auto_battle))
 		hud.speed_pressed.connect(func(): game.cycle_speed())
@@ -349,6 +348,7 @@ func _player_choose(u: Node) -> Dictionary:
 		state = State.BUSY
 	_clear_highlights()
 	hud.hide_skills()
+	hud.hide_tip(self)
 	return choice
 
 
@@ -404,7 +404,11 @@ func _refresh_targeting() -> void:
 		else:
 			u.set_target_highlight(0)
 	if hover_valid:
-		hud.set_preview(_preview_text(current_unit, hovered, selected_skill))
+		hud.show_tip(_preview_text(current_unit, hovered, selected_skill), self)
+	elif hovered and hovered.alive:
+		hud.show_tip(hud.unit_tip(hovered), self)
+	else:
+		hud.hide_tip(self)
 
 
 func _clear_highlights() -> void:
@@ -458,6 +462,16 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(_delta: float) -> void:
 	if state != State.WAIT_INPUT:
 		_pending_click = false
+		# outside targeting, hovering a unit shows its summary
+		if _mouse_moved:
+			_mouse_moved = false
+			var h := _pick(_mouse)
+			if h != hovered:
+				hovered = h
+				if h:
+					hud.show_tip(hud.unit_tip(h), self)
+				else:
+					hud.hide_tip(self)
 		return
 	if not (_mouse_moved or _pending_click):
 		return
@@ -710,8 +724,6 @@ func _apply_hit(c: Node, t: Node, r: Dictionary, reacted: Dictionary) -> void:
 		vfx.text(top, I18n.s("glancing"), Color(0.7, 0.7, 0.75), 40, 1.0, 0.9)
 	elif r.crushing:
 		vfx.text(top, I18n.s("crushing"), Color(1.0, 0.4, 0.35), 44, 1.0, 0.9)
-	if r.aff == 1 and not reacted.has(t):
-		vfx.text(top + Vector3.UP * 0.3, I18n.s("advantage"), Color(0.45, 1.0, 0.5), 34, 1.0, 0.9)
 	vfx.sparks(t.center_position(), ecol)
 	_deal_damage(c, t, r.dmg, r)
 	if t.alive:

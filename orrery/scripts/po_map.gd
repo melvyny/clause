@@ -13,6 +13,7 @@ const Cam = preload("po_camera.gd")
 const PLATE_SHADER := preload("../shaders/po_plate.gdshader")
 
 signal node_chosen(id: int)
+signal node_hovered(id: int)
 
 var run
 var cam: Camera3D
@@ -58,10 +59,10 @@ func _process(delta: float) -> void:
 		var on: bool = id in avail
 		tk.ring.visible = on
 		if on:
-			var s := 1.0 + 0.12 * sin(_time * 4.0 + id) + (0.25 if id == _hover else 0.0)
+			var s := 1.0 + 0.12 * sin(_time * 4.0 + id)
 			tk.ring.scale = Vector3(s, 1, s)
 			tk.ring.rotate_y(delta * 1.2)
-		var target := 1.25 if id == _hover else 1.0
+		var target := 1.25 if (id == _hover and id in avail) else 1.0
 		tk.root.scale = tk.root.scale.lerp(Vector3.ONE * target, minf(1.0, delta * 10.0))
 	if _pawn:
 		_pawn.rotate_y(delta * 0.6)
@@ -200,17 +201,21 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not interactive or run == null:
 		return
 	if event is InputEventMouseMotion:
-		_hover = _pick(event.position)
+		var h := _pick(event.position, true)
+		if h != _hover:
+			_hover = h
+			node_hovered.emit(h)
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var id := _pick(event.position)
 		if id >= 0:
 			node_chosen.emit(id)
 
 
-func _pick(screen: Vector2) -> int:
+func _pick(screen: Vector2, any_node: bool = false) -> int:
 	var best := -1
 	var best_d := 60.0
-	for id in run.available():
+	var ids: Array = range(run.nodes.size()) if any_node else run.available()
+	for id in ids:
 		var p: Vector3 = run.node(id).pos + Vector3(0, 0.4, 0)
 		if cam.is_position_behind(p):
 			continue

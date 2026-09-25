@@ -81,6 +81,11 @@ Title → choose a starting trio → travel 8 floors across the **porcelain plat
 - 青花盘着色器 `po_plate.gdshader`：海水纹、云纹、莲瓣盘心，盘面本身也带金缮。*Sea-wave band, cloud scrolls, lotus medallion, gilded cracks.*
 - 角色站在瓷器底座上，像摆件一样；死亡时碎成瓷片，修补时碎片飞回原位。*Figurines on glazed plinths; they shatter into shards and reassemble when mended.*
 
+## 界面 · UI
+
+界面分三层：常驻画面只放图标和数字，说明在鼠标悬停时出现，完整规则放在规则页和图鉴里。所有图标都是代码里的 SVG（`po_icons.gd`），以后换美术只需要替换这一个文件。
+*Three layers: icons and numbers on screen, details on hover, full rules in the rules page and Codex. All icons are inline SVG in `po_icons.gd`, so art can be swapped in one place.*
+
 ## 操作 · Controls
 
 | 操作 Action | 按键 Key |
