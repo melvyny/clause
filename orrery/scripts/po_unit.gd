@@ -67,7 +67,7 @@ func _ready() -> void:
 	add_child(model)
 	model_height = model.get_meta("height", 2.0)
 	pick_radius = model.get_meta("radius", 0.8)
-	muzzle = model.get_meta("muzzle", null)
+	muzzle = model.get_meta("muzzle") if model.has_meta("muzzle") else null
 	if is_boss:
 		model.scale = Vector3.ONE * 1.35
 		model_height *= 1.35
@@ -75,6 +75,7 @@ func _ready() -> void:
 	for entry in model.get_meta("bobbers"):
 		_base_positions[entry[0]] = entry[0].position
 	_porcelain = model.get_meta("porcelain", [])
+	play_anim("idle")
 	_collect_meshes(model)
 	_flash_mat = StandardMaterial3D.new()
 	_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -150,6 +151,21 @@ func _process(delta: float) -> void:
 			look.y = _arrow.global_position.y
 			if look.distance_to(_arrow.global_position) > 0.01:
 				_arrow.look_at(look, Vector3.UP)
+
+
+## Plays a clip on imported glTF creatures (no-op for procedural models).
+## Non-idle clips fall back to idle when they finish.
+func play_anim(role: String) -> bool:
+	if not model.has_meta("anim_player"):
+		return false
+	var ap: AnimationPlayer = model.get_meta("anim_player")
+	var map: Dictionary = model.get_meta("anims", {})
+	if not map.has(role):
+		return false
+	ap.play(map[role], 0.15)
+	if role != "idle" and role != "death" and map.has("idle"):
+		ap.queue(map["idle"])
+	return true
 
 
 # --- Stats ------------------------------------------------------------------------
@@ -281,6 +297,7 @@ func reset_facing() -> void:
 
 # --- Animations (awaitable) -------------------------------------------------------
 func anim_lunge(target_pos: Vector3) -> void:
+	play_anim("attack")
 	var dir := (target_pos - global_position)
 	dir.y = 0
 	var dist := maxf(dir.length() - 1.6, 0.5)
@@ -300,6 +317,8 @@ func anim_return() -> void:
 
 
 func anim_cast() -> void:
+	if not play_anim("cast"):
+		play_anim("attack")
 	var t := create_tween().set_trans(Tween.TRANS_SINE)
 	var s0 := model.scale
 	t.tween_property(model, "scale", s0 * Vector3(1.12, 0.9, 1.12), 0.12)
@@ -311,6 +330,8 @@ func anim_cast() -> void:
 
 
 func anim_ultimate() -> void:
+	if not play_anim("cast"):
+		play_anim("attack")
 	var s0 := model.scale
 	var t := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	t.tween_property(model, "position:y", 1.3, 0.45)
@@ -324,6 +345,7 @@ func anim_ultimate() -> void:
 
 
 func anim_hit(crit: bool) -> void:
+	play_anim("hit")
 	for mi in _meshes:
 		if is_instance_valid(mi):
 			mi.material_overlay = _flash_mat
@@ -346,6 +368,8 @@ func anim_death() -> void:
 	set_active(false)
 	set_target_highlight(0)
 	var t := create_tween().set_trans(Tween.TRANS_QUAD)
+	if play_anim("death"):
+		t.tween_interval(0.6)
 	t.tween_property(model, "rotation_degrees:z", 12.0, 0.12)
 	t.tween_property(model, "scale", model.scale * 1.08, 0.12)
 	await t.finished

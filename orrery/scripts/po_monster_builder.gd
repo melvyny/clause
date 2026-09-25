@@ -55,6 +55,32 @@ class Kit:
 			M.add_mesh(parent, M.sphere(size), M.glow(eye, 6.0), pos + Vector3(side * spread, 0, 0))
 
 
+## Target model heights when normalising imported glTF creatures.
+const GLTF_HEIGHT := {
+	"emberlynx": 1.9, "tidemoth": 2.3, "chimeram": 1.9, "lumenowl": 2.2,
+	"kilnbear": 2.6, "cobaltshell": 1.9, "galemantis": 2.1, "tenmoku": 2.4,
+}
+## Animation name keywords (matched case-insensitively, first hit wins).
+const ANIM_KEYS := {
+	"idle": ["idle", "flying_idle", "stand", "survey"],
+	"attack": ["attack", "bite", "punch", "headbutt", "slash", "sword", "weapon", "claw", "kick"],
+	"cast": ["spell", "cast", "roar", "yell", "dance", "yes", "wave", "jump"],
+	"hit": ["hitreact", "hit_react", "hitrecieve", "hitreceive", "hit", "damage", "hurt"],
+	"death": ["death", "die", "dead"],
+}
+
+
+## Optional drop-in: `res://orrery/models/<species_id>.glb` (or .gltf) replaces
+## the procedural model. Any rigged creature works (e.g. CC0 packs such as
+## Quaternius "Ultimate Monsters"); it is re-glazed with the porcelain shader.
+static func model_path(species_id: String) -> String:
+	for ext in ["glb", "gltf"]:
+		var p := "res://orrery/models/%s.%s" % [species_id, ext]
+		if ResourceLoader.exists(p):
+			return p
+	return ""
+
+
 static func build(species_id: String, is_enemy: bool) -> Node3D:
 	var k := Kit.new()
 	k.root = Node3D.new()
@@ -66,6 +92,12 @@ static func build(species_id: String, is_enemy: bool) -> Node3D:
 	k.glaze = GLAZES[el]
 	k.core = Data.ELEMENT_COLORS[el]
 	k.eye = Color(1.0, 0.2, 0.25) if is_enemy else k.core.lerp(Color.WHITE, 0.35)
+	var gltf := model_path(species_id)
+	if gltf != "":
+		var scene = load(gltf)
+		if scene is PackedScene:
+			_from_gltf(k, scene, GLTF_HEIGHT.get(species_id, 2.0))
+			return k.root
 	match species_id:
 		"emberlynx":
 			_ember_lynx(k)
@@ -394,3 +426,86 @@ static func _serpent(k: Kit) -> void:
 	body.add_child(haze)
 	k.root.set_meta("height", 2.5)
 	k.root.set_meta("radius", 0.8)
+
+
+# --- Imported glTF creatures ---------------------------------------------------------
+static func _from_gltf(k: Kit, scene: PackedScene, target_height: float) -> void:
+	var pivot := k.node(k.root, Vector3.ZERO, Vector3(0, 180, 0))  # glTF faces +Z, we face -Z
+	var inst := scene.instantiate() as Node3D
+	pivot.add_child(inst)
+	var meshes: Array = []
+	_collect(inst, meshes)
+	# bounds in `inst` space
+	var box := AABB()
+	var first := true
+	for mi in meshes:
+		var xf := _relative_xform(mi, inst)
+		var b: AABB = xf * mi.get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	var s := target_height / maxf(box.size.y, 0.001)
+	inst.scale = Vector3.ONE * s
+	var c := box.get_center()
+	inst.position = Vector3(-c.x * s, -box.position.y * s, -c.z * s)
+	# re-glaze: dip each mesh up to ~45% of its own height
+	for mi in meshes:
+		var ab: AABB = mi.get_aabb()
+		var dip := ab.position.y + ab.size.y * 0.45
+		# ~3 kintsugi cells per metre, expressed in this mesh's local units
+		var local_to_world := s * _xform_scale(mi, inst)
+		var m := k.p(dip, 0.0, 3.0 * local_to_world)
+		m.set_shader_parameter("drip", 0.12 / maxf(local_to_world, 0.0001))
+		mi.material_override = m
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	var ap := _find_player(inst)
+	if ap:
+		var map := {}
+		var names := ap.get_animation_list()
+		for role in ANIM_KEYS:
+			for key in ANIM_KEYS[role]:
+				for n in names:
+					if not map.has(role) and String(n).to_lower().contains(key):
+						map[role] = n
+		if not map.has("idle") and names.size() > 0:
+			map["idle"] = names[0]
+		if map.has("idle"):
+			ap.get_animation(map["idle"]).loop_mode = Animation.LOOP_LINEAR
+		k.root.set_meta("anim_player", ap)
+		k.root.set_meta("anims", map)
+	k.muzzle(k.root, Vector3(0, target_height * 0.7, -0.5))
+	k.root.set_meta("height", target_height)
+	k.root.set_meta("radius", clampf(maxf(box.size.x, box.size.z) * s * 0.45, 0.6, 1.3))
+	var aura := M.particles(k.core, 20, 1.6, 0.14, 0.5, Vector3.UP, 60, Vector3(0, 0.2, 0), 0.7)
+	aura.position = Vector3(0, target_height * 0.4, 0)
+	k.root.add_child(aura)
+
+
+static func _collect(n: Node, out: Array) -> void:
+	if n is MeshInstance3D and n.mesh:
+		out.append(n)
+	for c in n.get_children():
+		_collect(c, out)
+
+
+static func _relative_xform(n: Node3D, ancestor: Node3D) -> Transform3D:
+	var xf := Transform3D.IDENTITY
+	var cur: Node = n
+	while cur and cur != ancestor:
+		if cur is Node3D:
+			xf = (cur as Node3D).transform * xf
+		cur = cur.get_parent()
+	return xf
+
+
+static func _xform_scale(n: Node3D, ancestor: Node3D) -> float:
+	return _relative_xform(n, ancestor).basis.get_scale().y
+
+
+static func _find_player(n: Node) -> AnimationPlayer:
+	if n is AnimationPlayer:
+		return n
+	for c in n.get_children():
+		var r := _find_player(c)
+		if r:
+			return r
+	return null
