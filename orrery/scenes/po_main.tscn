@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://bporcelain0main"]
+
+[ext_resource type="Script" path="res://orrery/scripts/po_battle.gd" id="1_battle"]
+
+[node name="Battle" type="Node3D"]
+script = ExtResource("1_battle")

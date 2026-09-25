@@ -1,0 +1,19 @@
+; Engine configuration file.
+; Minimal standalone project so the prototype can be opened directly.
+; If you copy `orrery/` into an existing project, do NOT copy this
+; file -- just open `res://orrery/scenes/po_main.tscn` and press F6.
+
+config_version=5
+
+[application]
+
+config/name="Porcelain Orrery 瓷星召唤"
+run/main_scene="res://orrery/scenes/po_main.tscn"
+config/features=PackedStringArray("4.3", "Forward Plus")
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
