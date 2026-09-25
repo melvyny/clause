@@ -25,6 +25,24 @@ A playable **one-run vertical slice** (~15–20 min) of a roguelite monster-coll
 
 *The night sky is a great blue-and-white plate. It broke once and was mended with gold; the gold seams became the star paths. The pieces that were never mended have gathered into **The Unmended**. You are a Mender: take your porcelain figures and follow the cracks to the heart of the plate.*
 
+## 器灵 · Vessel Spirits
+
+每一只角色都是**真实存在的传世名瓷**化成的漫画形象；数据里记录了原型的国家、年代和器物名（`origin` 字段），以后可以扩展到代尔夫特、迈森、伊万里、伊兹尼克等其他国家的瓷器。器身用"旋转成型"（像拉坯一样）生成，釉面按真实工艺着色。
+*Every character is a **real, museum-famous porcelain piece** drawn as a cartoon. Each carries an `origin` (country, era, piece), so the roster can grow to Delft, Meissen, Imari, Iznik and beyond. Bodies are lathe-turned like thrown pottery; glazes follow the real techniques.*
+
+| 器灵 Spirit | 原型文物 Real piece | 元素 | 定位 Role | 釉面 Glaze |
+|---|---|---|---|---|
+| 鸡缸杯 Chicken Cup | 明·成化斗彩鸡缸杯 · Ming Chenghua doucai cup | 火 Fire | 输出 Striker | 斗彩 doucai enamels |
+| 虎枕 Tiger Pillow | 宋金·磁州窑虎形枕 · Cizhou tiger pillow | 火 Fire | 斗士 Bruiser | 白地黑花 + 虎纹 |
+| 汝窑莲碗 Ru Lotus Bowl | 北宋·汝窑天青釉莲花式温碗 · Ru ware lotus bowl | 水 Water | 辅助 Support | 天青 + 冰裂纹 crackle |
+| 将军罐 General Jar | 清·康熙青花将军罐 · Kangxi blue-and-white jar | 水 Water | 坦克 Tank | 青花 blue-and-white |
+| 三彩马 Sancai Steed | 唐·三彩马 · Tang sancai horse | 风 Wind | 控速 Tempo | 三彩流釉 running glaze |
+| 凤耳瓶 Phoenix Vase | 南宋·龙泉窑青釉凤耳瓶 · Longquan celadon vase | 风 Wind | 刺客 Assassin | 梅子青 celadon |
+| 孩儿枕 Child Pillow | 北宋·定窑白釉孩儿枕 · Ding ware child pillow | 光 Light | 治疗 Healer | 象牙白 ivory |
+| 曜变盏 Yohen Bowl | 南宋·建窑曜变天目盏 · Jian "yohen" tea bowl | 暗 Dark | 法师 Caster | 曜变星斑 + 兔毫 |
+
+标题页的「器灵图鉴」可以查看每只器灵的原型与小传。 *Open the **Codex** from the title screen for each spirit's origin and story.*
+
 ## 核心卖点 · Core hook
 
 **碎裂与金缮 · Shatter & Mend**

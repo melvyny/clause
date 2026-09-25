@@ -18,6 +18,7 @@ const Battle = preload("po_battle.gd")
 const HUD = preload("po_hud.gd")
 const Audio = preload("po_audio.gd")
 const Console = preload("po_console.gd")
+const Codex = preload("po_codex.gd")
 
 const BRASS := Color(0.9, 0.7, 0.38)
 const IVORY := Color(0.96, 0.94, 0.88)
@@ -91,6 +92,8 @@ func _ready() -> void:
 		"end":
 			run.new_run(0, 7)
 			show_end(true)
+		"codex":
+			show_codex()
 		_:
 			show_title()
 
@@ -262,7 +265,8 @@ func _creature_bbcode(sid: String, extra: String = "") -> String:
 	var sp: Dictionary = Data.SPECIES[sid]
 	var col: Color = Data.ELEMENT_COLORS[sp.element]
 	var t := "[font_size=22][color=#%s][b]%s[/b][/color][/font_size]\n" % [_hex(col), I18n.f(sp, "name")]
-	t += "[color=#%s]%s[/color] · %s\n" % [_hex(col), I18n.element(sp.element), I18n.f(sp, "role")]
+	t += "[color=#%s]%s[/color] · %s · [color=#aab]%s[/color]\n" % [_hex(col), I18n.element(sp.element), I18n.f(sp, "role"), I18n.f(sp.origin, "era")]
+	t += "[i][color=#ccd]%s[/color][/i]\n" % I18n.f(sp, "lore")
 	t += "[color=#8fb8ff]%s[/color] %s\n" % [I18n.f(sp.passive, "name"), I18n.f(sp.passive, "desc")]
 	for sk in sp.skills:
 		t += "[color=#e6b35f]•[/color] %s\n" % I18n.f(sk, "name")
@@ -379,11 +383,65 @@ func show_title() -> void:
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
 	h.add_theme_constant_override("separation", 14)
 	h.add_child(_button(I18n.s("start_run"), show_starters, 240))
+	h.add_child(_button(I18n.s("codex"), show_codex, 180))
 	h.add_child(_button(I18n.s("lang_btn"), toggle_language, 140))
 	v.add_child(h)
 	_fade_in()
 	if _autotest:
 		show_starters.call_deferred()
+
+
+# --- Codex ------------------------------------------------------------------------------------------
+var _codex_info: RichTextLabel
+
+
+func show_codex() -> void:
+	_screen = show_codex
+	_clear_world()
+	_clear_ui()
+	var codex := Codex.new()
+	world.add_child(codex)
+	codex.selected.connect(_codex_selected)
+	var t := _label(I18n.s("codex_title"), 34, BRASS)
+	t.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	t.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	t.offset_top = 18
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_constant_override("outline_size", 10)
+	t.add_theme_color_override("font_outline_color", Color(0.03, 0.03, 0.1))
+	ui.add_child(t)
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.offset_right = -24
+	panel.custom_minimum_size = Vector2(420, 0)
+	panel.add_theme_stylebox_override("panel", HUD._sb(Color(0.03, 0.03, 0.09, 0.9), BRASS, 2, 14, 18))
+	_codex_info = _rich(I18n.s("codex_hint"), 16, 380)
+	panel.add_child(_codex_info)
+	ui.add_child(panel)
+	var back := _button(I18n.s("back"), show_title, 160)
+	back.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	back.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	back.offset_left = 24
+	back.offset_bottom = -24
+	ui.add_child(back)
+	_fade_in()
+	for a in _args:
+		if a.begins_with("--gm-codex-focus="):
+			codex.focus.call_deferred(int(a.get_slice("=", 1)))
+
+
+func _codex_selected(sid: String) -> void:
+	var sp: Dictionary = Data.SPECIES[sid]
+	var o: Dictionary = sp.origin
+	var t := "[font_size=28][color=#%s][b]%s[/b][/color][/font_size]\n" % [_hex(Data.ELEMENT_COLORS[sp.element]), I18n.f(sp, "name")]
+	t += "[color=#e6b35f]%s · %s · %s[/color]\n" % [I18n.f(o, "country"), I18n.f(o, "era"), I18n.f(o, "piece")]
+	t += "%s · %s\n\n[i]%s[/i]\n\n" % [I18n.element(sp.element), I18n.f(sp, "role"), I18n.f(sp, "lore")]
+	t += "[color=#8fb8ff]%s · %s[/color] %s\n" % [I18n.s("passive"), I18n.f(sp.passive, "name"), I18n.f(sp.passive, "desc")]
+	for sk in sp.skills:
+		t += "[color=#e6b35f]• %s[/color] %s\n" % [I18n.f(sk, "name"), I18n.f(sk, "desc")]
+	_codex_info.text = t
 
 
 func show_starters() -> void:
