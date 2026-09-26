@@ -12,7 +12,7 @@ A playable **one-run vertical slice** (~15–20 min) of a roguelite monster-coll
 | ![map](docs/map_zh.png) | ![mend](docs/mend_zh.png) |
 | **首领战：意图、裂纹、相生 · Boss: intents, crack, chains** | **奖励：器艺或釉片 · Reward: upgrade or shard** |
 | ![battle](docs/battle_en.png) | ![reward](docs/reward_en.png) |
-| **规则页：五行 · 崩裂 · 相生 · Rules page** | **器灵图鉴：羁绊与器艺 · Codex: traits & upgrades** |
+| **规则页：五行 · 崩裂 · 相生 · Rules page** | **器灵图鉴（博古架）：羁绊与器艺 · Codex cabinet: traits & upgrades** |
 | ![rules](docs/rules_zh.png) | ![codex](docs/codex_zh.png) |
 
 ## 运行 · Run
