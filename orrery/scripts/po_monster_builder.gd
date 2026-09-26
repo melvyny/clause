@@ -1,42 +1,60 @@
 extends RefCounted
-## Porcelain Orrery :: procedural creature models.
-## Each creature is a porcelain automaton assembled from primitives, dipped in
-## its element's glaze and mended with kintsugi gold (po_porcelain.gdshader).
+## Goldmend :: Vessel Spirit models (器灵).
+## Each figure is a real historical porcelain piece drawn as a cartoon. Vessel
+## bodies are lathe-turned from a profile curve (like pottery thrown on a
+## wheel), then given faces and limbs, and glazed with po_porcelain.gdshader
+## using the matching real surface technique (doucai, Ru crackle, sancai, ...).
 ## Models face -Z. The returned root carries metadata used by the unit:
 ##   "spinners":  Array of [Node3D, Vector3 axis, float deg_per_sec]
 ##   "bobbers":   Array of [Node3D, float amplitude, float speed, float phase]
-##   "porcelain": Array of ShaderMaterial (unit drives their `damage` uniform)
+##   "porcelain": Array of ShaderMaterial (unit drives `damage` / `mended`)
 ##   "height", "radius", "muzzle"
 
 const M = preload("po_mat.gd")
 const Data = preload("po_data.gd")
 
-## Glaze colour per element: oxblood, cobalt, celadon, ivory-gold, tenmoku.
+## Plinth glaze per Five-Phase element (金木水火土), after the great kilns:
+## Ding ivory with gilding, Longquan celadon, Ru sky-blue, Jun copper red,
+## and the brown-black of a Jian / Cizhou stoneware body.
 const GLAZES := [
-	Color(0.62, 0.07, 0.06),
-	Color(0.07, 0.2, 0.68),
-	Color(0.42, 0.68, 0.55),
-	Color(0.93, 0.78, 0.42),
-	Color(0.07, 0.05, 0.08),
+	Color(0.93, 0.88, 0.74),
+	Color(0.42, 0.62, 0.5),
+	Color(0.52, 0.7, 0.74),
+	Color(0.62, 0.12, 0.14),
+	Color(0.36, 0.22, 0.14),
 ]
+const WHITE := Color(0.96, 0.95, 0.91)
+const IVORY := Color(0.94, 0.9, 0.78)
 
 
 class Kit:
 	var root: Node3D
 	var glaze: Color
 	var core: Color
-	var eye: Color
+	var enemy := false
 
-	func p(dip: float = 0.0, glaze_all: float = 0.0, crack: float = 3.2, body: Color = Color(0.95, 0.94, 0.9)) -> ShaderMaterial:
-		var m := M.porcelain(glaze, dip, core, glaze_all, crack, 0.014, body)
+	## Porcelain material. opts: glaze, glaze2, glaze3, pattern, pscale, dip, all, crack, body, gloss
+	func mat(opts: Dictionary = {}) -> ShaderMaterial:
+		var m := M.porcelain(opts.get("glaze", glaze), opts.get("dip", 0.0), core, opts.get("all", 0.0),
+			opts.get("crack", 3.2), opts.get("outline", 0.014), opts.get("body", WHITE))
+		m.set_shader_parameter("pattern", opts.get("pattern", 0))
+		m.set_shader_parameter("glaze2", opts.get("glaze2", Color(0.2, 0.45, 0.2)))
+		m.set_shader_parameter("glaze3", opts.get("glaze3", Color(0.85, 0.6, 0.2)))
+		m.set_shader_parameter("pattern_scale", opts.get("pscale", 4.0))
+		if opts.has("gloss"):
+			m.set_shader_parameter("gloss", opts.gloss)
 		root.get_meta("porcelain").append(m)
 		return m
 
-	func spin(node: Node3D, axis: Vector3, speed: float) -> void:
-		root.get_meta("spinners").append([node, axis, speed])
+	## Legacy helper kept for the boss model.
+	func p(dip: float = 0.0, glaze_all: float = 0.0, crack: float = 3.2, body: Color = WHITE) -> ShaderMaterial:
+		return mat({"dip": dip, "all": glaze_all, "crack": crack, "body": body})
 
-	func bob(node: Node3D, amp: float, speed: float, phase: float = 0.0) -> void:
-		root.get_meta("bobbers").append([node, amp, speed, phase])
+	func spin(n: Node3D, axis: Vector3, speed: float) -> void:
+		root.get_meta("spinners").append([n, axis, speed])
+
+	func bob(n: Node3D, amp: float, speed: float, phase: float = 0.0) -> void:
+		root.get_meta("bobbers").append([n, amp, speed, phase])
 
 	func node(parent: Node3D, pos: Vector3, rot: Vector3 = Vector3.ZERO) -> Node3D:
 		var n := Node3D.new()
@@ -50,9 +68,101 @@ class Kit:
 		m.name = "Muzzle"
 		root.set_meta("muzzle", m)
 
-	func eyes(parent: Node3D, pos: Vector3, spread: float, size: float) -> void:
+	## Cartoon eyes: white, pupil and glint. `mood`: "open", "fierce", "sleepy", "happy".
+	func eyes(parent: Node3D, pos: Vector3, spread: float, size: float, mood: String = "open") -> void:
+		var white := M.glow(Color(0.98, 0.97, 0.94), 0.25)
+		var pupil_col := Color(0.9, 0.12, 0.1) if enemy else Color(0.05, 0.04, 0.06)
+		var pupil := M.glow(pupil_col, 2.5 if enemy else 0.0)
+		var ink := M.glow(Color(0.05, 0.04, 0.06), 0.0)
 		for side in [-1.0, 1.0]:
-			M.add_mesh(parent, M.sphere(size), M.glow(eye, 6.0), pos + Vector3(side * spread, 0, 0))
+			var e := node(parent, pos + Vector3(side * spread, 0, 0))
+			if mood == "sleepy" or mood == "happy":
+				# closed, curved eyes: ^ ^ (happy) or - - (sleepy)
+				var arc := M.add_mesh(e, M.torus(size * 0.75, size * 0.95, 20), ink, Vector3.ZERO, Vector3(90, 0, 0), Vector3(1, 1, 0.5))
+				if mood == "sleepy":
+					arc.scale = Vector3(1.0, 1.0, 0.25)
+				continue
+			M.add_mesh(e, M.sphere(size, 16, 8), white, Vector3.ZERO, Vector3.ZERO, Vector3(1.0, 1.15, 0.45))
+			M.add_mesh(e, M.sphere(size * 0.55, 12, 6), pupil, Vector3(0, -size * 0.1, -size * 0.3), Vector3.ZERO, Vector3(1, 1.1, 0.5))
+			M.add_mesh(e, M.sphere(size * 0.18, 8, 4), M.glow(Color.WHITE, 1.5), Vector3(size * 0.2, size * 0.2, -size * 0.45))
+			if mood == "fierce":
+				M.add_mesh(e, M.capsule(size * 0.14, size * 1.9), ink, Vector3(0, size * 1.05, -size * 0.2), Vector3(0, 0, 90 + side * 18))
+
+	func blush(parent: Node3D, pos: Vector3, spread: float, size: float) -> void:
+		for side in [-1.0, 1.0]:
+			M.add_mesh(parent, M.sphere(size, 12, 6), M.glow(Color(1.0, 0.55, 0.55), 0.6, 0.55), pos + Vector3(side * spread, 0, 0), Vector3.ZERO, Vector3(1, 0.6, 0.3))
+
+
+# --- Lathe (wheel-thrown) meshes -------------------------------------------------------------
+## Revolves a profile (x = radius, y = height) around Y. `petals` scallops the
+## rim like a lotus. Reverse the profile to get an inward-facing surface.
+static func lathe(profile: PackedVector2Array, segments: int = 48, petals: int = 0, petal_amp: float = 0.0) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_smooth_group(0)
+	for i in profile.size() - 1:
+		for j in segments:
+			var a0 := TAU * j / segments
+			var a1 := TAU * (j + 1) / segments
+			var p00 := _rev(profile[i], a0, petals, petal_amp)
+			var p01 := _rev(profile[i], a1, petals, petal_amp)
+			var p10 := _rev(profile[i + 1], a0, petals, petal_amp)
+			var p11 := _rev(profile[i + 1], a1, petals, petal_amp)
+			for v in [p00, p11, p10, p00, p01, p11]:
+				st.add_vertex(v)
+	st.index()
+	st.generate_normals()
+	return st.commit()
+
+
+static func _rev(p: Vector2, a: float, petals: int, amp: float) -> Vector3:
+	var r := p.x * (1.0 + amp * cos(petals * a) if petals > 0 else 1.0)
+	return Vector3(cos(a) * r, p.y, sin(a) * r)
+
+
+## Outer + inner surfaces of an open vessel (bowl, cup). Returns [outer, inner].
+static func vessel(outer: PackedVector2Array, wall: float, segments: int = 48, petals: int = 0, petal_amp: float = 0.0) -> Array:
+	var inner := PackedVector2Array()
+	for i in range(outer.size() - 1, 0, -1):
+		var q := outer[i]
+		inner.append(Vector2(maxf(q.x - wall, 0.0), q.y + (wall if i < 2 else 0.0)))
+	inner.append(Vector2(0.0, outer[1].y + wall))
+	var rim := PackedVector2Array([outer[outer.size() - 1], inner[0]])
+	return [lathe(outer, segments, petals, petal_amp), lathe(inner, segments, petals, petal_amp), lathe(rim, segments, petals, petal_amp)]
+
+
+static func pv(points: Array) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for p in points:
+		out.append(Vector2(p[0], p[1]))
+	return out
+
+
+# --- Build entry -------------------------------------------------------------------------------
+## Target model heights when normalising imported glTF creatures.
+const GLTF_HEIGHT := {
+	"chickencup": 2.0, "rulotus": 1.8, "sancaihorse": 2.1, "childpillow": 1.5,
+	"tigerpillow": 1.7, "generaljar": 2.4, "phoenixvase": 2.4, "yohenbowl": 2.0,
+	"changshaewer": 2.1, "cimu": 2.6, "monkcap": 2.0,
+}
+## Animation name keywords (matched case-insensitively, first hit wins).
+const ANIM_KEYS := {
+	"idle": ["idle", "flying_idle", "stand", "survey"],
+	"attack": ["attack", "bite", "punch", "headbutt", "slash", "sword", "weapon", "claw", "kick"],
+	"cast": ["spell", "cast", "roar", "yell", "dance", "yes", "wave", "jump"],
+	"hit": ["hitreact", "hit_react", "hitrecieve", "hitreceive", "hit", "damage", "hurt"],
+	"death": ["death", "die", "dead"],
+}
+
+
+## Optional drop-in: `res://orrery/models/<species_id>.glb` (or .gltf) replaces
+## the procedural model and is re-glazed with the porcelain shader.
+static func model_path(species_id: String) -> String:
+	for ext in ["glb", "gltf"]:
+		var p := "res://orrery/models/%s.%s" % [species_id, ext]
+		if ResourceLoader.exists(p):
+			return p
+	return ""
 
 
 static func build(species_id: String, is_enemy: bool) -> Node3D:
@@ -62,335 +172,611 @@ static func build(species_id: String, is_enemy: bool) -> Node3D:
 	k.root.set_meta("spinners", [])
 	k.root.set_meta("bobbers", [])
 	k.root.set_meta("porcelain", [])
-	var el: int = Data.SPECIES[species_id].element
+	var el: int = Data.species_info(species_id).element
 	k.glaze = GLAZES[el]
 	k.core = Data.ELEMENT_COLORS[el]
-	k.eye = Color(1.0, 0.2, 0.25) if is_enemy else k.core.lerp(Color.WHITE, 0.35)
+	k.enemy = is_enemy
+	var gltf := model_path(species_id)
+	if gltf != "":
+		var scene = load(gltf)
+		if scene is PackedScene:
+			_from_gltf(k, scene, GLTF_HEIGHT.get(species_id, 2.0))
+			return k.root
 	match species_id:
-		"emberlynx":
-			_ember_lynx(k)
-		"tidemoth":
-			_tide_moth(k)
-		"chimeram":
-			_chime_ram(k)
-		"lumenowl":
-			_lumen_owl(k)
-		"kilnbear":
-			_kiln_bear(k)
-		"cobaltshell":
-			_cobalt_shell(k)
-		"galemantis":
-			_mantis(k)
-		"tenmoku":
-			_serpent(k)
+		"chickencup":
+			_chicken_cup(k)
+		"rulotus":
+			_ru_lotus(k)
+		"sancaihorse":
+			_sancai_horse(k)
+		"childpillow":
+			_child_pillow(k)
+		"tigerpillow":
+			_tiger_pillow(k)
+		"generaljar":
+			_general_jar(k)
+		"phoenixvase":
+			_phoenix_vase(k)
+		"yohenbowl":
+			_yohen_bowl(k)
+		"changshaewer":
+			_changsha_ewer(k)
+		"cimu":
+			_cimu(k)
+		"monkcap":
+			_monk_cap(k)
+		"boss":
+			_boss(k)
 	return k.root
 
 
-# --- Ember Lynx: lithe porcelain cat, oxblood glaze, flame-tipped ear tufts --------
-static func _ember_lynx(k: Kit) -> void:
+# --- 鸡缸杯 Chicken Cup: a doucai rooster wearing its own cup ---------------------------------
+static func _chicken_cup(k: Kit) -> void:
+	var red := Color(0.86, 0.16, 0.1)
+	var green := Color(0.2, 0.58, 0.32)
+	var yellow := Color(0.98, 0.78, 0.2)
 	var body := k.node(k.root, Vector3.ZERO)
-	k.bob(body, 0.035, 3.0)
-	var torso := k.p(0.05)
-	M.add_mesh(body, M.capsule(0.34, 1.4), torso, Vector3(0, 0.9, 0.05), Vector3(90, 0, 0))
-	M.add_mesh(body, M.sphere(0.4), k.p(-0.05), Vector3(0, 1.02, -0.45), Vector3.ZERO, Vector3(1, 1, 1.1))
-	M.add_mesh(body, M.torus(0.3, 0.37), M.brass(), Vector3(0, 1.18, -0.62), Vector3(65, 0, 0))
-	var head := k.node(body, Vector3(0, 1.38, -0.85))
-	k.bob(head, 0.03, 1.6, 1.0)
-	M.add_mesh(head, M.sphere(0.3), k.p(-0.12), Vector3.ZERO, Vector3.ZERO, Vector3(1.1, 0.95, 1.0))
-	M.add_mesh(head, M.sphere(0.15), k.p(0.2), Vector3(0, -0.08, -0.24), Vector3.ZERO, Vector3(1.2, 0.8, 1.0))
-	M.add_mesh(head, M.sphere(0.045), M.brass(Color(0.3, 0.12, 0.1)), Vector3(0, -0.02, -0.38))
-	k.eyes(head, Vector3(0, 0.06, -0.24), 0.12, 0.05)
+	k.bob(body, 0.04, 3.2)
+	# legs
 	for side in [-1.0, 1.0]:
-		var ear := k.node(head, Vector3(side * 0.17, 0.26, 0.02), Vector3(0, 0, side * -14))
-		M.add_mesh(ear, M.prism(Vector3(0.18, 0.34, 0.06)), k.p(0.0, 1.0), Vector3(0, 0.1, 0))
-		var tuft := M.particles(k.core, 14, 0.5, 0.16, 0.7, Vector3.UP, 15, Vector3(0, 1.0, 0), 0.02)
-		tuft.position = Vector3(0, 0.3, 0)
-		ear.add_child(tuft)
-		M.add_mesh(head, M.prism(Vector3(0.2, 0.16, 0.05)), k.p(0.0, 1.0), Vector3(side * 0.3, -0.12, -0.02), Vector3(0, side * 30, side * 90))
-	k.muzzle(head, Vector3(0, 0, -0.4))
-	for lp in [Vector3(-0.2, 0, -0.5), Vector3(0.2, 0, -0.5), Vector3(-0.2, 0, 0.5), Vector3(0.2, 0, 0.5)]:
-		var leg := k.node(body, lp + Vector3(0, 0.8, 0))
-		M.add_mesh(leg, M.cylinder(0.09, 0.07, 0.72), k.p(-0.05), Vector3(0, -0.4, 0))
-		M.add_mesh(leg, M.sphere(0.1), k.p(0.5, 1.0), Vector3(0, -0.76, -0.04), Vector3.ZERO, Vector3(1, 0.6, 1.3))
-	var tail := k.node(body, Vector3(0, 1.0, 0.72), Vector3(-55, 0, 0))
-	k.bob(tail, 0.06, 2.5, 0.5)
-	for i in 4:
-		M.add_mesh(tail, M.sphere(0.1 - i * 0.012), k.p(0.0, 1.0 if i == 3 else 0.0), Vector3(0, i * 0.18, i * 0.05))
-	var flame := M.particles(k.core, 24, 0.55, 0.26, 1.0, Vector3.UP, 20, Vector3(0, 1.4, 0), 0.06)
-	flame.position = Vector3(0, 0.72, 0.15)
-	tail.add_child(flame)
-	var embers := M.particles(Color(1.0, 0.75, 0.35), 18, 1.4, 0.07, 1.2, Vector3.UP, 45, Vector3(0, 0.4, 0), 0.55)
-	embers.position = Vector3(0, 1.0, 0)
-	body.add_child(embers)
-	k.root.set_meta("height", 1.9)
-	k.root.set_meta("radius", 0.8)
-
-
-# --- Tide Moth: floating moth, cobalt-dipped porcelain wings, orbiting droplets ----
-static func _tide_moth(k: Kit) -> void:
-	var body := k.node(k.root, Vector3(0, 0.9, 0))
-	k.bob(body, 0.14, 1.5)
-	M.add_mesh(body, M.sphere(0.26), k.p(-0.1), Vector3(0, 0.75, 0), Vector3.ZERO, Vector3(1, 1.1, 1))
+		M.add_mesh(body, M.cylinder(0.035, 0.045, 0.5), k.mat({"glaze": yellow, "all": 1.0}), Vector3(side * 0.15, 0.25, 0))
+		M.add_mesh(body, M.prism(Vector3(0.22, 0.05, 0.2)), k.mat({"glaze": yellow, "all": 1.0}), Vector3(side * 0.15, 0.02, -0.05), Vector3(-90, 0, 0))
+	# the cup (Chenghua "chicken cup" profile: small foot, gently flaring wall)
+	var cup := k.node(body, Vector3(0, 0.45, 0))
+	var cup_mat := k.mat({"pattern": 7, "glaze2": red, "glaze3": green, "pscale": 3.0, "dip": -1.0})
+	var parts := vessel(pv([[0.0, 0.0], [0.24, 0.0], [0.27, 0.06], [0.3, 0.1], [0.55, 0.3], [0.72, 0.55], [0.8, 0.72]]), 0.04)
+	M.add_mesh(cup, parts[0], cup_mat)
+	M.add_mesh(cup, parts[1], k.mat({"dip": -1.0}))
+	M.add_mesh(cup, parts[2], M.brass(Color(1.0, 0.78, 0.35), 0.25))
+	# rooster rising out of the cup
+	var bird := k.node(cup, Vector3(0, 0.45, 0))
+	M.add_mesh(bird, M.sphere(0.46), k.mat({"pattern": 7, "glaze2": red, "glaze3": yellow, "pscale": 5.0, "dip": -1.0}), Vector3(0, 0.25, 0.05), Vector3.ZERO, Vector3(1.0, 0.95, 1.2))
+	var head := k.node(bird, Vector3(0, 0.85, -0.3))
+	k.bob(head, 0.05, 2.6, 0.5)
+	M.add_mesh(head, M.sphere(0.27), k.mat({"dip": -1.0}), Vector3.ZERO)
 	for i in 3:
-		M.add_mesh(body, M.sphere(0.24 - i * 0.05), k.p(0.1, 1.0 if i == 2 else 0.0), Vector3(0, 0.45 - i * 0.24, 0.12 + i * 0.1))
-	var head := k.node(body, Vector3(0, 1.08, -0.1))
-	M.add_mesh(head, M.sphere(0.17), k.p(0.1, 0.0))
-	k.eyes(head, Vector3(0, 0.02, -0.13), 0.09, 0.055)
-	for side in [-1.0, 1.0]:
-		var ant := k.node(head, Vector3(side * 0.07, 0.12, -0.05), Vector3(-25, 0, side * -25))
-		M.add_mesh(ant, M.capsule(0.015, 0.45), M.brass(), Vector3(0, 0.22, 0))
-		for f in 4:
-			M.add_mesh(ant, M.prism(Vector3(0.14 - f * 0.02, 0.05, 0.01)), M.brass(), Vector3(0, 0.12 + f * 0.08, 0))
-		M.add_mesh(ant, M.sphere(0.035), M.glow(k.core, 5.0), Vector3(0, 0.46, 0))
-		for w in 2:
-			var pivot := k.node(body, Vector3(side * 0.12, 0.8 - w * 0.3, 0.05))
-			var wing := k.node(pivot, Vector3.ZERO)
-			var size := Vector3(0.95, 0.62, 0.04) if w == 0 else Vector3(0.7, 0.5, 0.04)
-			M.add_mesh(wing, M.sphere(0.5, 20, 10), k.p(-0.05 + w * 0.05, 0.0, 4.5),
-				Vector3(side * 0.48, 0.12 - w * 0.2, 0.05), Vector3(0, side * 12, side * (28 - w * 60)), size)
-			M.add_mesh(wing, M.sphere(0.12, 12, 6), M.glow(k.core, 3.0), Vector3(side * 0.62, 0.2 - w * 0.28, 0.02),
-				Vector3.ZERO, Vector3(1, 1, 0.3))
-			k.bob(wing, 0.06, 7.5, w * 0.9)
-			k.spin(wing, Vector3.FORWARD, 0.0)
-	k.muzzle(head, Vector3(0, 0, -0.25))
-	var orbit := k.node(body, Vector3(0, 0.55, 0))
-	for i in 5:
-		var a := TAU * i / 5.0
-		M.add_mesh(orbit, M.sphere(0.07), M.glow(k.core.lerp(Color.WHITE, 0.3), 4.0, 0.85), Vector3(cos(a), 0.2 * sin(a * 3.0), sin(a)) * 0.95)
-	k.spin(orbit, Vector3.UP, 70.0)
-	for i in 2:
-		var ring := M.add_mesh(k.root, M.torus(0.5 + i * 0.3, 0.55 + i * 0.3), M.glow(k.core, 2.0, 0.55), Vector3(0, 0.04 + i * 0.01, 0))
-		k.bob(ring, 0.02, 2.0, i * 1.5)
-	var dust := M.particles(k.core.lerp(Color.WHITE, 0.5), 30, 1.8, 0.1, 0.4, Vector3.DOWN, 50, Vector3(0, -0.4, 0), 0.8)
-	dust.position = Vector3(0, 0.6, 0)
-	body.add_child(dust)
-	k.root.set_meta("height", 2.3)
-	k.root.set_meta("radius", 0.8)
-
-
-# --- Chime Ram: woolly porcelain ram with spiral horns hung with brass chimes -----
-static func _chime_ram(k: Kit) -> void:
-	var body := k.node(k.root, Vector3.ZERO)
-	k.bob(body, 0.03, 2.2)
-	var wool := k.p(0.0)
-	M.add_mesh(body, M.sphere(0.55), wool, Vector3(0, 1.0, 0.05), Vector3.ZERO, Vector3(1.0, 0.85, 1.35))
-	for i in 9:
-		var a := TAU * i / 9.0
-		M.add_mesh(body, M.sphere(0.22), k.p(-0.05), Vector3(cos(a) * 0.42, 1.2 + sin(a * 2.0) * 0.08, sin(a) * 0.55 + 0.05))
-	var head := k.node(body, Vector3(0, 1.3, -0.72))
-	k.bob(head, 0.025, 1.4, 0.6)
-	M.add_mesh(head, M.sphere(0.26), k.p(0.3, 1.0), Vector3.ZERO, Vector3.ZERO, Vector3(0.9, 1.0, 1.25))
-	M.add_mesh(head, M.sphere(0.2), k.p(0.1), Vector3(0, 0.12, 0.02))
-	k.eyes(head, Vector3(0, 0.05, -0.2), 0.14, 0.045)
-	for side in [-1.0, 1.0]:
-		var horn := k.node(head, Vector3(side * 0.2, 0.2, 0.05))
-		for i in 7:
-			var a := i * 0.8
-			var r := 0.22 - i * 0.012
-			var pos := Vector3(side * (0.12 + sin(a) * r), cos(a) * r * 0.9, 0.1 - i * 0.02 + (1.0 - cos(a)) * 0.05)
-			M.add_mesh(horn, M.sphere(0.1 - i * 0.008), k.p(0.0, 1.0, 5.0), pos)
-		for c in 3:
-			var chime := k.node(horn, Vector3(side * (0.1 + c * 0.08), -0.25, 0.05 + c * 0.04))
-			M.add_mesh(chime, M.cylinder(0.018, 0.018, 0.2 + c * 0.05, 8), M.brass(), Vector3(0, -0.12 - c * 0.02, 0))
-			k.bob(chime, 0.02, 5.0 + c, c)
-	k.muzzle(head, Vector3(0, 0.1, -0.3))
-	for lp in [Vector3(-0.25, 0, -0.35), Vector3(0.25, 0, -0.35), Vector3(-0.25, 0, 0.45), Vector3(0.25, 0, 0.45)]:
-		var leg := k.node(body, lp + Vector3(0, 0.6, 0))
-		M.add_mesh(leg, M.cylinder(0.08, 0.07, 0.55), k.p(-0.1, 1.0), Vector3(0, -0.3, 0))
-		M.add_mesh(leg, M.cylinder(0.09, 0.1, 0.1), M.brass(), Vector3(0, -0.56, 0))
-	var swirl := M.particles(k.core, 36, 1.2, 0.18, 1.6, Vector3.UP, 12, Vector3.ZERO, 0.9)
-	swirl.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
-	swirl.emission_ring_axis = Vector3.UP
-	swirl.emission_ring_radius = 1.0
-	swirl.emission_ring_inner_radius = 0.85
-	swirl.emission_ring_height = 0.05
-	swirl.tangential_accel_min = 3.0
-	swirl.tangential_accel_max = 5.0
-	swirl.position = Vector3(0, 0.15, 0)
-	body.add_child(swirl)
-	k.root.set_meta("height", 1.9)
-	k.root.set_meta("radius", 0.8)
-
-
-# --- Lumen Owl: round ivory owl hovering over a brass perch, lantern eyes ----------
-static func _lumen_owl(k: Kit) -> void:
-	var perch := k.node(k.root, Vector3(0, 0.4, 0))
-	M.add_mesh(perch, M.torus(0.42, 0.48), M.brass(), Vector3.ZERO)
-	k.spin(perch, Vector3.UP, 30.0)
-	var body := k.node(k.root, Vector3(0, 0.55, 0))
-	k.bob(body, 0.1, 1.4)
-	M.add_mesh(body, M.sphere(0.5), k.p(-0.15), Vector3(0, 0.62, 0), Vector3.ZERO, Vector3(1, 1.2, 0.95))
-	M.add_mesh(body, M.sphere(0.36), k.p(0.0, 0.0, 5.0, Color(1, 0.99, 0.95)), Vector3(0, 0.55, -0.22), Vector3.ZERO, Vector3(1, 1.2, 0.6))
-	var head := k.node(body, Vector3(0, 1.25, -0.02))
-	k.bob(head, 0.03, 0.9, 0.3)
-	M.add_mesh(head, M.sphere(0.42), k.p(-0.3), Vector3.ZERO, Vector3.ZERO, Vector3(1.15, 0.9, 1.0))
-	for side in [-1.0, 1.0]:
-		M.add_mesh(head, M.sphere(0.17), k.p(0.3, 0.0, 3.2, Color(1, 1, 0.97)), Vector3(side * 0.17, 0.0, -0.3), Vector3.ZERO, Vector3(1, 1, 0.4))
-		M.add_mesh(head, M.torus(0.1, 0.13), M.brass(), Vector3(side * 0.17, 0.0, -0.35), Vector3(90, 0, 0))
-		M.add_mesh(head, M.prism(Vector3(0.14, 0.28, 0.06)), k.p(0.0, 1.0), Vector3(side * 0.3, 0.38, 0.0), Vector3(0, 0, side * -20))
-		var wing := k.node(body, Vector3(side * 0.48, 0.7, 0.05), Vector3(0, 0, side * 8))
-		M.add_mesh(wing, M.sphere(0.4), k.p(0.1, 0.0, 4.0), Vector3(0, -0.1, 0), Vector3(0, 0, side * 10), Vector3(0.3, 1.0, 0.8))
-		k.bob(wing, 0.04, 3.0, side)
-		M.add_mesh(body, M.cylinder(0.03, 0.05, 0.2, 8), M.brass(), Vector3(side * 0.15, 0.0, -0.05))
-	k.eyes(head, Vector3(0, 0.0, -0.37), 0.17, 0.075)
-	M.add_mesh(head, M.prism(Vector3(0.08, 0.12, 0.08)), M.brass(), Vector3(0, -0.12, -0.38), Vector3(180, 0, 0))
-	var lantern := OmniLight3D.new()
-	lantern.light_color = k.core
-	lantern.light_energy = 1.2
-	lantern.omni_range = 2.5
-	lantern.position = Vector3(0, 0, -0.6)
-	head.add_child(lantern)
+		M.add_mesh(head, M.sphere(0.1 - i * 0.012), k.mat({"glaze": red, "all": 1.0}), Vector3(0, 0.26 + i * 0.03, 0.08 - i * 0.12))
+	M.add_mesh(head, M.prism(Vector3(0.14, 0.2, 0.14)), k.mat({"glaze": yellow, "all": 1.0}), Vector3(0, -0.02, -0.3), Vector3(-90, 0, 0))
+	M.add_mesh(head, M.sphere(0.07), k.mat({"glaze": red, "all": 1.0}), Vector3(0, -0.17, -0.2), Vector3.ZERO, Vector3(0.8, 1.3, 0.8))
+	k.eyes(head, Vector3(0, 0.06, -0.2), 0.12, 0.07, "fierce")
 	k.muzzle(head, Vector3(0, 0, -0.45))
-	var halo := k.node(body, Vector3(0, 1.3, 0))
-	for i in 8:
-		var a := TAU * i / 8.0
-		M.add_mesh(halo, M.prism(Vector3(0.06, 0.16, 0.02)), M.glow(k.core, 3.5), Vector3(cos(a), 0, sin(a)) * 0.78, Vector3(90, rad_to_deg(-a), 0))
-	k.spin(halo, Vector3.UP, -40.0)
-	var motes := M.particles(k.core, 22, 2.0, 0.1, 0.35, Vector3.UP, 90, Vector3(0, 0.2, 0), 0.9)
-	motes.position = Vector3(0, 0.8, 0)
-	body.add_child(motes)
-	k.root.set_meta("height", 2.25)
-	k.root.set_meta("radius", 0.75)
-
-
-# --- Kiln Bear: hulking bear with a burning kiln in its chest and a chimney -------
-static func _kiln_bear(k: Kit) -> void:
-	var body := k.node(k.root, Vector3.ZERO)
-	k.bob(body, 0.03, 1.4)
-	M.add_mesh(body, M.sphere(0.72), k.p(-0.1, 0.0, 2.6), Vector3(0, 1.2, 0.05), Vector3.ZERO, Vector3(1.1, 1.05, 0.95))
-	M.add_mesh(body, M.sphere(0.5), k.p(0.2), Vector3(0, 1.75, -0.08))
-	# the kiln
-	M.add_mesh(body, M.torus(0.26, 0.34), M.brass(Color(0.55, 0.38, 0.22), 0.45), Vector3(0, 1.2, -0.66), Vector3(90, 0, 0))
-	M.add_mesh(body, M.cylinder(0.27, 0.27, 0.05, 24), M.glow(k.core, 5.0), Vector3(0, 1.2, -0.64), Vector3(90, 0, 0))
-	var fire := M.particles(k.core, 30, 0.6, 0.22, 1.0, Vector3(0, 0.6, -1), 25, Vector3(0, 1.5, 0), 0.15)
-	fire.position = Vector3(0, 1.2, -0.7)
-	body.add_child(fire)
-	var glow_light := OmniLight3D.new()
-	glow_light.light_color = k.core
-	glow_light.light_energy = 1.6
-	glow_light.omni_range = 3.0
-	glow_light.position = Vector3(0, 1.2, -1.0)
-	body.add_child(glow_light)
-	# chimney + smoke
-	M.add_mesh(body, M.cylinder(0.12, 0.14, 0.5, 12), M.brass(Color(0.4, 0.3, 0.25), 0.5), Vector3(0.28, 2.2, 0.3), Vector3(-10, 0, -10))
-	var smoke := M.particles(Color(0.55, 0.5, 0.6, 0.5), 20, 2.2, 0.45, 0.8, Vector3.UP, 12, Vector3(0, 0.3, 0.2), 0.08, false)
-	smoke.position = Vector3(0.32, 2.5, 0.35)
-	body.add_child(smoke)
-	var head := k.node(body, Vector3(0, 2.15, -0.35))
-	k.bob(head, 0.025, 1.2, 0.8)
-	M.add_mesh(head, M.sphere(0.34), k.p(-0.05), Vector3.ZERO, Vector3.ZERO, Vector3(1.1, 0.95, 1.0))
-	M.add_mesh(head, M.sphere(0.16), k.p(0.3, 1.0), Vector3(0, -0.08, -0.3), Vector3.ZERO, Vector3(1.2, 0.9, 1.0))
-	k.eyes(head, Vector3(0, 0.08, -0.28), 0.13, 0.045)
+	# enamel tail fan
+	var tail := k.node(bird, Vector3(0, 0.4, 0.45), Vector3(-30, 0, 0))
+	k.bob(tail, 0.05, 2.0, 1.0)
+	var cols := [red, green, yellow, Color(0.2, 0.4, 0.85), red]
+	for i in 5:
+		var a := -50.0 + i * 25.0
+		M.add_mesh(tail, M.prism(Vector3(0.18, 0.75, 0.05)), k.mat({"glaze": cols[i], "all": 1.0}), Vector3(sin(deg_to_rad(a)) * 0.2, 0.35, 0), Vector3(0, 0, -a))
 	for side in [-1.0, 1.0]:
-		M.add_mesh(head, M.sphere(0.12), k.p(0.0, 1.0), Vector3(side * 0.28, 0.28, 0.02), Vector3.ZERO, Vector3(1, 1, 0.6))
-		var arm := k.node(body, Vector3(side * 0.82, 1.6, -0.1), Vector3(-15, 0, side * 12))
-		M.add_mesh(arm, M.capsule(0.2, 0.9), k.p(0.1), Vector3(0, -0.4, 0))
-		M.add_mesh(arm, M.sphere(0.26), k.p(0.2, 1.0), Vector3(0, -0.9, -0.05))
-		k.bob(arm, 0.04, 1.4, side)
-		M.add_mesh(body, M.cylinder(0.22, 0.25, 0.55), k.p(0.3, 1.0), Vector3(side * 0.38, 0.3, 0.05))
-	k.muzzle(body, Vector3(0, 1.2, -0.9))
-	k.root.set_meta("height", 2.6)
+		M.add_mesh(bird, M.sphere(0.25, 16, 8), k.mat({"glaze": green, "all": 1.0}), Vector3(side * 0.4, 0.25, 0.1), Vector3(0, 0, side * 20), Vector3(0.35, 0.7, 1.1))
+	var fire := M.particles(Color(1.0, 0.45, 0.15, 0.9), 22, 0.6, 0.22, 1.0, Vector3.UP, 20, Vector3(0, 1.4, 0), 0.08)
+	fire.position = Vector3(0, 0.4, 0.0)
+	head.add_child(fire)
+	k.root.set_meta("parts", {"body": body, "bird": bird, "head": head, "tail": tail})
+	k.root.set_meta("height", 2.2)
+	k.root.set_meta("radius", 0.8)
+
+
+# --- 汝窑莲碗 Ru Lotus Bowl: sky-blue crackled lotus bowl, full of water ------------------------
+static func _ru_lotus(k: Kit) -> void:
+	var sky := Color(0.6, 0.74, 0.78)
+	var body := k.node(k.root, Vector3(0, 0.45, 0))
+	k.bob(body, 0.12, 1.5)
+	var glaze := k.mat({"glaze": sky, "all": 1.0, "pattern": 3, "pscale": 7.0, "body": sky, "crack": 2.6})
+	var parts := vessel(pv([[0.0, 0.0], [0.26, 0.0], [0.3, 0.08], [0.33, 0.12], [0.6, 0.3], [0.82, 0.62], [0.9, 0.82]]), 0.05, 64, 10, 0.07)
+	M.add_mesh(body, parts[0], glaze)
+	M.add_mesh(body, parts[1], glaze)
+	M.add_mesh(body, parts[2], glaze)
+	var water := M.add_mesh(body, M.cylinder(0.76, 0.76, 0.02, 48), M.glow(Color(0.35, 0.75, 1.0), 1.2, 0.75), Vector3(0, 0.68, 0))
+	k.bob(water, 0.02, 3.0)
+	var ripple := M.add_mesh(body, M.torus(0.35, 0.4), M.glow(Color(0.7, 0.95, 1.0), 2.0, 0.7), Vector3(0, 0.7, 0))
+	k.spin(ripple, Vector3.UP, 40.0)
+	# a lotus bud floating in the water
+	var bud := k.node(body, Vector3(0, 0.78, 0.05))
+	for i in 6:
+		var a := TAU * i / 6.0
+		M.add_mesh(bud, M.sphere(0.13, 12, 6), k.mat({"glaze": Color(0.95, 0.72, 0.78), "all": 1.0}), Vector3(cos(a), 0.9, sin(a)) * 0.1, Vector3(0, rad_to_deg(-a), 25), Vector3(0.6, 1.3, 0.35))
+	k.spin(bud, Vector3.UP, 20.0)
+	k.eyes(body, Vector3(0, 0.42, -0.72), 0.2, 0.09, "happy")
+	k.blush(body, Vector3(0, 0.33, -0.74), 0.34, 0.07)
+	for side in [-1.0, 1.0]:
+		var hand := k.node(body, Vector3(side * 0.88, 0.45, -0.1), Vector3(0, 0, side * -30))
+		M.add_mesh(hand, M.sphere(0.2, 16, 8), k.mat({"glaze": Color(0.35, 0.6, 0.5), "all": 1.0}), Vector3.ZERO, Vector3.ZERO, Vector3(1.0, 0.25, 0.7))
+		k.bob(hand, 0.06, 2.2, side)
+	k.muzzle(body, Vector3(0, 0.8, -0.3))
+	var drops := M.particles(Color(0.6, 0.9, 1.0, 0.9), 26, 1.6, 0.1, 0.6, Vector3.UP, 50, Vector3(0, -0.5, 0), 0.6)
+	drops.position = Vector3(0, 0.8, 0)
+	body.add_child(drops)
+	k.root.set_meta("parts", {"bowl": body, "water": water})
+	k.root.set_meta("height", 1.9)
+	k.root.set_meta("radius", 0.95)
+
+
+# --- 三彩马 Sancai Steed: Tang tri-colour horse with running glazes ------------------------------
+static func _sancai_horse(k: Kit) -> void:
+	var amber := Color(0.8, 0.5, 0.14)
+	var green := Color(0.22, 0.5, 0.24)
+	var cream := Color(0.95, 0.88, 0.7)
+	var sancai := {"pattern": 2, "glaze": amber, "glaze2": green, "glaze3": cream, "body": cream, "dip": 0.3, "pscale": 3.0}
+	var body := k.node(k.root, Vector3.ZERO)
+	k.bob(body, 0.04, 2.8)
+	M.add_mesh(body, M.capsule(0.36, 1.45), k.mat(sancai), Vector3(0, 1.05, 0.05), Vector3(90, 0, 0))
+	# saddle with green cloth
+	M.add_mesh(body, M.cylinder(0.38, 0.4, 0.08, 24), k.mat({"glaze": green, "all": 1.0}), Vector3(0, 1.37, 0.1), Vector3(0, 0, 0), Vector3(1, 1, 1.25))
+	M.add_mesh(body, M.cylinder(0.26, 0.3, 0.14, 20), k.mat({"glaze": amber, "all": 1.0}), Vector3(0, 1.45, 0.1), Vector3.ZERO, Vector3(1, 1, 1.3))
+	var neck := k.node(body, Vector3(0, 1.25, -0.55), Vector3(-35, 0, 0))
+	M.add_mesh(neck, M.capsule(0.2, 0.8), k.mat(sancai), Vector3(0, 0.3, 0))
+	for i in 5:
+		M.add_mesh(neck, M.prism(Vector3(0.06, 0.18, 0.14)), k.mat({"glaze": green, "all": 1.0}), Vector3(0, 0.1 + i * 0.13, 0.17), Vector3(-20, 0, 0))
+	# head points forward and a little down; its axis is local +Y
+	var head := k.node(neck, Vector3(0, 0.72, -0.05), Vector3(-75, 0, 0))
+	k.bob(head, 0.03, 2.0, 0.6)
+	M.add_mesh(head, M.cylinder(0.12, 0.2, 0.62, 16), k.mat({"glaze": cream, "all": 1.0}), Vector3(0, 0.2, 0))
+	M.add_mesh(head, M.sphere(0.14), k.mat({"glaze": cream, "all": 1.0}), Vector3(0, 0.5, 0))
+	M.add_mesh(head, M.sphere(0.2), k.mat({"glaze": cream, "all": 1.0}), Vector3(0, -0.02, 0.04))
+	for side in [-1.0, 1.0]:
+		M.add_mesh(head, M.prism(Vector3(0.08, 0.2, 0.05)), k.mat({"glaze": amber, "all": 1.0}), Vector3(side * 0.1, -0.08, 0.2), Vector3(-90, 0, side * 15))
+	# eyes live on the body so they face forward regardless of the head tilt
+	k.eyes(body, Vector3(0, 1.98, -1.02), 0.16, 0.065, "open")
+	k.muzzle(head, Vector3(0, 0.55, 0))
+	for lp in [Vector3(-0.2, 0, -0.5), Vector3(0.2, 0, -0.5), Vector3(-0.2, 0, 0.55), Vector3(0.2, 0, 0.55)]:
+		var leg := k.node(body, lp + Vector3(0, 0.95, 0))
+		M.add_mesh(leg, M.cylinder(0.09, 0.07, 0.9), k.mat(sancai), Vector3(0, -0.47, 0))
+		M.add_mesh(leg, M.cylinder(0.09, 0.1, 0.1), k.mat({"glaze": Color(0.2, 0.15, 0.1), "all": 1.0}), Vector3(0, -0.93, 0))
+	var tail := k.node(body, Vector3(0, 1.1, 0.8), Vector3(40, 0, 0))
+	k.bob(tail, 0.06, 3.0, 1.0)
+	for i in 3:
+		M.add_mesh(tail, M.prism(Vector3(0.12, 0.6, 0.05)), k.mat({"glaze": [amber, green, amber][i], "all": 1.0}), Vector3((i - 1) * 0.05, -0.3, 0), Vector3(0, 0, (i - 1) * 12))
+	var dust := M.particles(Color(0.9, 0.8, 0.5, 0.7), 20, 1.0, 0.18, 1.2, Vector3.UP, 30, Vector3(0, 0.5, 0), 0.6, false)
+	dust.position = Vector3(0, 0.1, 0.4)
+	body.add_child(dust)
+	k.root.set_meta("parts", {"body": body, "neck": neck, "head": head, "tail": tail})
+	k.root.set_meta("height", 2.4)
+	k.root.set_meta("radius", 0.85)
+
+
+# --- 孩儿枕 Child Pillow: the sleepy Ding ware child lying on his tummy ---------------------------
+static func _child_pillow(k: Kit) -> void:
+	var ivory := {"glaze": IVORY, "all": 1.0, "body": IVORY, "pattern": 1, "glaze2": Color(0.98, 0.94, 0.84), "pscale": 2.0, "gloss": 0.2}
+	var body := k.node(k.root, Vector3(0, 0.25, 0))
+	k.bob(body, 0.07, 1.2)
+	# the mat he lies on (the pillow base, incised with a lotus pattern)
+	M.add_mesh(body, M.cylinder(0.72, 0.66, 0.24, 40), k.mat({"glaze": IVORY, "all": 1.0, "body": IVORY, "pattern": 4, "pscale": 5.0}), Vector3(0, 0.12, 0), Vector3.ZERO, Vector3(1.0, 1, 1.35))
+	M.add_mesh(body, M.torus(0.66, 0.72, 48), M.brass(), Vector3(0, 0.24, 0), Vector3.ZERO, Vector3(1.0, 1, 1.35))
+	# body lying prone, head toward the camera side of the model (-Z)
+	M.add_mesh(body, M.capsule(0.3, 1.05), k.mat(ivory), Vector3(0, 0.52, 0.1), Vector3(90, 0, 0))
+	var head := k.node(body, Vector3(0, 0.78, -0.6))
+	k.bob(head, 0.03, 1.0)
+	M.add_mesh(head, M.sphere(0.38), k.mat(ivory), Vector3.ZERO, Vector3.ZERO, Vector3(1.05, 0.95, 1.0))
+	M.add_mesh(head, M.sphere(0.12), k.mat(ivory), Vector3(0, 0.36, 0.05))
+	for side in [-1.0, 1.0]:
+		M.add_mesh(head, M.sphere(0.1), k.mat(ivory), Vector3(side * 0.22, 0.28, 0.1))
+	k.eyes(head, Vector3(0, 0.04, -0.34), 0.13, 0.07, "sleepy")
+	k.blush(head, Vector3(0, -0.07, -0.33), 0.2, 0.07)
+	M.add_mesh(head, M.torus(0.03, 0.05, 16), M.glow(Color(0.35, 0.15, 0.15), 0.0), Vector3(0, -0.14, -0.35), Vector3(90, 0, 0), Vector3(1, 1, 0.6))
+	# arms folded under the chin, legs kicked up behind
+	for side in [-1.0, 1.0]:
+		M.add_mesh(body, M.capsule(0.1, 0.5), k.mat(ivory), Vector3(side * 0.2, 0.5, -0.55), Vector3(90, side * 30, 0))
+		var leg := k.node(body, Vector3(side * 0.13, 0.55, 0.6), Vector3(-60 - side * 10, 0, side * 8))
+		M.add_mesh(leg, M.capsule(0.11, 0.55), k.mat(ivory), Vector3(0, 0.25, 0))
+		M.add_mesh(leg, M.sphere(0.12), k.mat(ivory), Vector3(0, 0.55, 0.02), Vector3.ZERO, Vector3(1, 0.8, 1.3))
+		k.bob(leg, 0.04, 2.0, side * 1.5)
+	# the embroidered ball he plays with
+	var ball := k.node(body, Vector3(0.5, 0.45, -0.75))
+	M.add_mesh(ball, M.sphere(0.13), k.mat({"glaze": Color(0.9, 0.3, 0.3), "all": 1.0}))
+	M.add_mesh(ball, M.torus(0.12, 0.14), M.brass(), Vector3.ZERO, Vector3(90, 0, 0))
+	k.spin(ball, Vector3.UP, 60.0)
+	k.muzzle(head, Vector3(0, 0.2, -0.4))
+	var z := M.particles(Color(1.0, 0.95, 0.7, 0.9), 10, 2.0, 0.12, 0.35, Vector3(0.3, 1, 0), 15, Vector3.ZERO, 0.1)
+	z.position = Vector3(0.3, 0.4, 0)
+	head.add_child(z)
+	k.root.set_meta("parts", {"body": body, "head": head, "ball": ball})
+	k.root.set_meta("height", 1.55)
+	k.root.set_meta("radius", 0.85)
+
+
+# --- 虎枕 Tiger Pillow: a grumpy Cizhou tiger with a landscape painted on its back -----------------
+static func _tiger_pillow(k: Kit) -> void:
+	var ochre := Color(0.86, 0.62, 0.26)
+	var black := Color(0.08, 0.06, 0.05)
+	var fur := {"glaze": ochre, "glaze2": black, "pattern": 5, "all": 1.0, "body": ochre, "crack": 2.5}
+	var body := k.node(k.root, Vector3.ZERO)
+	k.bob(body, 0.025, 1.4)
+	# lying body: an ovoid turned on its side
+	var torso := k.node(body, Vector3(0, 0.55, 0.1), Vector3(90, 0, 0))
+	M.add_mesh(torso, lathe(pv([[0.0, -0.8], [0.3, -0.72], [0.48, -0.45], [0.55, 0.0], [0.5, 0.45], [0.32, 0.75], [0.0, 0.82]]), 40), k.mat(fur), Vector3.ZERO, Vector3.ZERO, Vector3(1.0, 1.0, 0.85))
+	# the pillow top: white slip painted with a black landscape (Cizhou style)
+	M.add_mesh(body, M.cylinder(0.46, 0.46, 0.06, 40), k.mat({"glaze": black, "pattern": 4, "pscale": 3.5, "body": Color(0.95, 0.92, 0.84)}), Vector3(0, 1.0, 0.1), Vector3(-6, 0, 0), Vector3(1.0, 1, 1.6))
+	M.add_mesh(body, M.torus(0.44, 0.49, 48), k.mat({"glaze": black, "all": 1.0}), Vector3(0, 1.02, 0.1), Vector3(-6, 0, 0), Vector3(1.0, 1, 1.6))
+	var head := k.node(body, Vector3(0, 0.72, -0.8))
+	k.bob(head, 0.03, 1.2, 0.4)
+	M.add_mesh(head, M.sphere(0.44), k.mat(fur), Vector3.ZERO, Vector3.ZERO, Vector3(1.1, 0.92, 0.95))
+	M.add_mesh(head, M.sphere(0.2), k.mat({"glaze": Color(0.96, 0.92, 0.82), "all": 1.0}), Vector3(0, -0.12, -0.34), Vector3.ZERO, Vector3(1.3, 0.8, 0.8))
+	M.add_mesh(head, M.sphere(0.07), k.mat({"glaze": black, "all": 1.0}), Vector3(0, -0.04, -0.5))
+	for side in [-1.0, 1.0]:
+		M.add_mesh(head, M.sphere(0.14, 16, 8), k.mat(fur), Vector3(side * 0.32, 0.34, 0.02), Vector3.ZERO, Vector3(1, 1, 0.5))
+		for w in 2:
+			M.add_mesh(head, M.capsule(0.008, 0.35), M.glow(black, 0.0), Vector3(side * 0.3, -0.12 - w * 0.05, -0.38), Vector3(0, 0, 90 + side * (8 - w * 10)))
+	M.add_mesh(head, M.prism(Vector3(0.24, 0.1, 0.03)), M.glow(black, 0.0), Vector3(0, 0.3, -0.4), Vector3(0, 0, 180))
+	k.eyes(head, Vector3(0, 0.1, -0.38), 0.16, 0.08, "fierce")
+	k.muzzle(head, Vector3(0, 0, -0.55))
+	for pp in [Vector3(-0.32, 0.12, -0.6), Vector3(0.32, 0.12, -0.6), Vector3(-0.35, 0.12, 0.6), Vector3(0.35, 0.12, 0.6)]:
+		M.add_mesh(body, M.sphere(0.16), k.mat(fur), pp, Vector3.ZERO, Vector3(1, 0.7, 1.3))
+	var tail := k.node(body, Vector3(0.1, 0.5, 0.95), Vector3(0, 30, 0))
+	k.bob(tail, 0.05, 2.5)
+	for i in 4:
+		M.add_mesh(tail, M.sphere(0.08 - i * 0.008), k.mat(fur), Vector3(sin(i * 0.8) * 0.2, i * 0.08, i * 0.13))
+	var embers := M.particles(Color(1.0, 0.6, 0.25, 0.8), 14, 1.2, 0.1, 0.8, Vector3.UP, 40, Vector3(0, 0.3, 0), 0.5)
+	embers.position = Vector3(0, 0.8, 0)
+	body.add_child(embers)
+	k.root.set_meta("parts", {"body": body, "head": head, "tail": tail})
+	k.root.set_meta("height", 1.45)
 	k.root.set_meta("radius", 1.0)
 
 
-# --- Cobalt Shell: blue-and-white porcelain tortoise with a gilded rim -------------
-static func _cobalt_shell(k: Kit) -> void:
+# --- 将军罐 General Jar: blue-and-white armour, lid helmet, painted moustache --------------------
+static func _general_jar(k: Kit) -> void:
+	var cobalt := Color(0.07, 0.17, 0.58)
+	var bw := {"glaze": cobalt, "pattern": 4, "pscale": 3.2, "body": WHITE, "crack": 2.8}
 	var body := k.node(k.root, Vector3.ZERO)
-	k.bob(body, 0.02, 1.0)
-	var shell := k.node(body, Vector3(0, 0.75, 0.05))
-	M.add_mesh(shell, M.sphere(0.95, 28, 14), k.p(0.4, 0.0, 2.2), Vector3.ZERO, Vector3.ZERO, Vector3(1.0, 0.62, 1.15))
-	M.add_mesh(shell, M.torus(0.9, 1.0, 64), M.brass(), Vector3(0, -0.05, 0), Vector3.ZERO, Vector3(1.0, 1.0, 1.12))
-	for i in 6:
-		var a := TAU * i / 6.0
-		M.add_mesh(shell, M.sphere(0.22, 6, 3), k.p(0.0, 1.0), Vector3(cos(a) * 0.5, 0.42, sin(a) * 0.58), Vector3.ZERO, Vector3(1, 0.4, 1))
-	M.add_mesh(shell, M.sphere(0.26, 6, 3), k.p(0.0, 1.0), Vector3(0, 0.6, 0), Vector3.ZERO, Vector3(1, 0.45, 1))
-	var head := k.node(body, Vector3(0, 0.85, -1.15))
-	k.bob(head, 0.04, 1.3, 0.4)
-	M.add_mesh(head, M.capsule(0.15, 0.5), k.p(0.0), Vector3(0, -0.1, 0.25), Vector3(60, 0, 0))
-	M.add_mesh(head, M.sphere(0.22), k.p(-0.05), Vector3.ZERO, Vector3.ZERO, Vector3(1, 0.9, 1.2))
-	k.eyes(head, Vector3(0, 0.06, -0.18), 0.12, 0.04)
-	k.muzzle(head, Vector3(0, 0, -0.3))
-	for lp in [Vector3(-0.7, 0, -0.6), Vector3(0.7, 0, -0.6), Vector3(-0.7, 0, 0.7), Vector3(0.7, 0, 0.7)]:
-		M.add_mesh(body, M.sphere(0.24), k.p(0.1), lp + Vector3(0, 0.25, 0), Vector3.ZERO, Vector3(1, 1.2, 1))
-	M.add_mesh(body, M.capsule(0.08, 0.35), k.p(0.1), Vector3(0, 0.55, 1.2), Vector3(70, 0, 0))
-	for i in 2:
-		var ring := M.add_mesh(k.root, M.torus(1.25 + i * 0.3, 1.3 + i * 0.3), M.glow(k.core, 2.0, 0.5), Vector3(0, 0.04, 0))
-		k.bob(ring, 0.02, 1.6, i * 1.2)
-	var bubbles := M.particles(k.core.lerp(Color.WHITE, 0.4), 16, 2.0, 0.12, 0.6, Vector3.UP, 20, Vector3(0, 0.2, 0), 1.0)
-	bubbles.position = Vector3(0, 0.4, 0)
-	body.add_child(bubbles)
-	k.root.set_meta("height", 1.9)
-	k.root.set_meta("radius", 1.1)
-
-
-# --- Celadon Mantis: eggshell-thin mantis with gold-edged scythe arms -------------
-static func _mantis(k: Kit) -> void:
-	var body := k.node(k.root, Vector3.ZERO)
-	k.bob(body, 0.05, 2.4)
-	M.add_mesh(body, M.sphere(0.3), k.p(0.1), Vector3(0, 0.75, 0.55), Vector3(-20, 0, 0), Vector3(0.8, 0.75, 1.8))
-	var thorax := k.node(body, Vector3(0, 1.1, -0.05), Vector3(-30, 0, 0))
-	M.add_mesh(thorax, M.capsule(0.13, 0.9), k.p(-0.2), Vector3(0, 0.3, 0))
-	var head := k.node(body, Vector3(0, 1.72, -0.4))
-	k.bob(head, 0.04, 1.8, 0.4)
-	M.add_mesh(head, M.prism(Vector3(0.42, 0.34, 0.2)), k.p(0.0, 1.0), Vector3.ZERO, Vector3(180, 0, 0))
+	k.bob(body, 0.03, 1.3)
 	for side in [-1.0, 1.0]:
-		M.add_mesh(head, M.sphere(0.09), M.glow(k.eye, 5.0), Vector3(side * 0.18, 0.08, -0.02), Vector3.ZERO, Vector3(1, 1.2, 1))
-		M.add_mesh(head, M.capsule(0.01, 0.5), M.brass(), Vector3(side * 0.08, 0.35, 0.05), Vector3(-30, 0, side * -20))
-		var arm := k.node(body, Vector3(side * 0.18, 1.45, -0.35), Vector3(-35, 0, side * 8))
-		M.add_mesh(arm, M.capsule(0.05, 0.55), k.p(0.1), Vector3(0, -0.2, 0))
-		var blade := k.node(arm, Vector3(0, -0.45, -0.05), Vector3(120, 0, 0))
-		M.add_mesh(blade, M.prism(Vector3(0.05, 0.75, 0.16), 0.2), k.p(0.4, 1.0, 5.0), Vector3(0, 0.3, 0))
-		M.add_mesh(blade, M.capsule(0.012, 0.7), M.brass(Color(1.0, 0.8, 0.4), 0.2), Vector3(0, 0.3, -0.07))
-		k.bob(arm, 0.05, 2.0, side)
-		for li in 2:
-			var leg := k.node(body, Vector3(side * 0.12, 0.8, 0.1 + li * 0.35), Vector3(0, 0, side * 40))
-			M.add_mesh(leg, M.capsule(0.025, 0.8), k.p(0.1, 1.0), Vector3(side * 0.0, -0.35, 0))
-		var wing := k.node(body, Vector3(side * 0.1, 1.05, 0.35), Vector3(-15, side * 10, side * -8))
-		M.add_mesh(wing, M.sphere(0.5, 16, 8), M.glow(k.core, 1.5, 0.3), Vector3(side * 0.15, 0, 0.3), Vector3.ZERO, Vector3(0.35, 0.05, 1.2))
-		k.bob(wing, 0.03, 9.0, side)
-	k.muzzle(head, Vector3(0, 0, -0.3))
-	var leaves := M.particles(k.core, 20, 1.5, 0.14, 1.2, Vector3.UP, 30, Vector3(0, 0.2, 0), 0.6)
-	leaves.position = Vector3(0, 0.6, 0)
-	leaves.tangential_accel_min = 2.0
-	leaves.tangential_accel_max = 3.0
-	body.add_child(leaves)
-	k.root.set_meta("height", 2.1)
-	k.root.set_meta("radius", 0.75)
-
-
-# --- Tenmoku Serpent: black-glazed coiled serpent with oil-spot sheen --------------
-static func _serpent(k: Kit) -> void:
-	var body := k.node(k.root, Vector3(0, 0.3, 0))
-	k.bob(body, 0.12, 1.1)
-	var coil := k.node(body, Vector3.ZERO)
-	k.spin(coil, Vector3.UP, 25.0)
-	var n := 16
-	for i in n:
-		var t := float(i) / n
-		var a := t * TAU * 1.6
-		var r := 0.62 - t * 0.2
-		var seg := M.add_mesh(coil, M.sphere(0.24 - t * 0.08, 20, 10), k.p(0.3, 1.0, 4.0, Color(0.2, 0.18, 0.24)),
-			Vector3(cos(a) * r, 0.2 + t * 0.9, sin(a) * r))
-		k.bob(seg, 0.03, 3.0, t * 6.0)
-	var neck := k.node(body, Vector3(0, 1.2, -0.2))
-	for i in 3:
-		M.add_mesh(neck, M.sphere(0.16 - i * 0.01), k.p(0.3, 1.0, 4.0, Color(0.2, 0.18, 0.24)), Vector3(0, i * 0.2, -i * 0.08))
-	var head := k.node(body, Vector3(0, 1.92, -0.45))
-	k.bob(head, 0.05, 1.3, 0.2)
-	M.add_mesh(head, M.sphere(0.24), k.p(0.3, 1.0, 4.0, Color(0.2, 0.18, 0.24)), Vector3.ZERO, Vector3.ZERO, Vector3(0.9, 0.7, 1.35))
-	M.add_mesh(head, M.sphere(0.4, 20, 10), k.p(0.0, 1.0, 3.0, Color(0.2, 0.18, 0.24)), Vector3(0, 0.02, 0.25), Vector3(-10, 0, 0), Vector3(1.35, 1.1, 0.12))
-	k.eyes(head, Vector3(0, 0.07, -0.2), 0.1, 0.045)
+		M.add_mesh(body, M.cylinder(0.12, 0.14, 0.35, 16), k.mat(bw), Vector3(side * 0.22, 0.18, 0))
+	var jar := k.node(body, Vector3(0, 0.3, 0))
+	M.add_mesh(jar, lathe(pv([[0.0, 0.0], [0.38, 0.0], [0.42, 0.08], [0.72, 0.5], [0.82, 0.85], [0.7, 1.25], [0.42, 1.45], [0.36, 1.55], [0.4, 1.6], [0.0, 1.6]]), 56), k.mat(bw))
+	# helmet lid with a finial and a red tassel
+	var lid := k.node(jar, Vector3(0, 1.6, 0))
+	k.bob(lid, 0.02, 2.0)
+	M.add_mesh(lid, lathe(pv([[0.0, 0.0], [0.48, 0.0], [0.5, 0.05], [0.44, 0.22], [0.25, 0.38], [0.0, 0.42]]), 48), k.mat(bw))
+	M.add_mesh(lid, M.sphere(0.1), k.mat({"glaze": cobalt, "all": 1.0}), Vector3(0, 0.5, 0))
+	var tassel := M.particles(Color(0.95, 0.2, 0.15, 0.95), 18, 0.8, 0.14, 0.6, Vector3.UP, 25, Vector3(0, -0.6, 0), 0.05, false)
+	tassel.position = Vector3(0, 0.58, 0)
+	lid.add_child(tassel)
+	# stern face and moustache on the shoulder
+	k.eyes(jar, Vector3(0, 1.12, -0.7), 0.2, 0.09, "fierce")
 	for side in [-1.0, 1.0]:
-		M.add_mesh(head, M.prism(Vector3(0.03, 0.1, 0.03)), M.brass(Color(1, 0.9, 0.7), 0.2), Vector3(side * 0.06, -0.12, -0.25), Vector3(180, 0, 0))
-	k.muzzle(head, Vector3(0, 0, -0.35))
-	# oil-spot motes
-	var orbit := k.node(body, Vector3(0, 0.9, 0))
-	for i in 4:
-		var a := TAU * i / 4.0
-		M.add_mesh(orbit, M.sphere(0.06), M.glow(Color(0.85, 0.65, 1.0), 5.0), Vector3(cos(a), 0.1 * sin(a * 2.0), sin(a)) * 1.0)
-	k.spin(orbit, Vector3.UP, -90.0)
-	var haze := M.particles(Color(0.55, 0.25, 0.85, 0.7), 30, 1.6, 0.35, 0.4, Vector3.DOWN, 40, Vector3(0, -0.3, 0), 0.6, false)
-	haze.position = Vector3(0, 0.2, 0)
-	body.add_child(haze)
+		M.add_mesh(jar, M.capsule(0.035, 0.32), M.glow(Color(0.05, 0.04, 0.08), 0.0), Vector3(side * 0.12, 0.92, -0.78), Vector3(0, 0, side * 70))
+	# arms: round shield (a plate) and a halberd
+	var shield_arm := k.node(jar, Vector3(-0.85, 0.8, -0.2), Vector3(0, 0, 20))
+	M.add_mesh(shield_arm, M.capsule(0.1, 0.45), k.mat(bw), Vector3(0, -0.15, 0))
+	var shield := k.node(shield_arm, Vector3(-0.1, -0.2, -0.3), Vector3(80, -20, 0))
+	M.add_mesh(shield, lathe(pv([[0.0, 0.0], [0.4, 0.02], [0.45, 0.08], [0.0, 0.05]]), 40), k.mat({"glaze": cobalt, "pattern": 4, "pscale": 6.0}))
+	k.bob(shield_arm, 0.04, 1.3, 0.5)
+	var spear_arm := k.node(jar, Vector3(0.85, 0.8, -0.1), Vector3(0, 0, -20))
+	M.add_mesh(spear_arm, M.capsule(0.1, 0.45), k.mat(bw), Vector3(0, -0.15, 0))
+	var halberd := k.node(spear_arm, Vector3(0.05, -0.35, -0.1))
+	M.add_mesh(halberd, M.cylinder(0.025, 0.025, 2.0), M.brass(Color(0.4, 0.25, 0.15), 0.5), Vector3(0, 0.6, 0))
+	M.add_mesh(halberd, M.prism(Vector3(0.12, 0.35, 0.03)), M.brass(Color(0.9, 0.9, 0.95), 0.2), Vector3(0, 1.75, 0))
+	M.add_mesh(halberd, M.prism(Vector3(0.3, 0.18, 0.02), 0.0), M.brass(Color(0.9, 0.9, 0.95), 0.2), Vector3(0.12, 1.5, 0), Vector3(0, 0, -90))
+	k.bob(spear_arm, 0.04, 1.3, 1.5)
+	k.muzzle(jar, Vector3(0, 1.1, -0.8))
+	k.root.set_meta("parts", {"body": body, "jar": jar, "lid": lid, "shield_arm": shield_arm, "spear_arm": spear_arm})
+	k.root.set_meta("height", 2.45)
+	k.root.set_meta("radius", 1.0)
+
+
+# --- 凤耳瓶 Phoenix Vase: Longquan celadon vase whose phoenix handles fight for it ----------------
+static func _phoenix_vase(k: Kit) -> void:
+	var celadon := Color(0.48, 0.68, 0.56)
+	var glaze := {"glaze": celadon, "all": 1.0, "body": celadon, "crack": 3.0, "gloss": 0.1}
+	var body := k.node(k.root, Vector3(0, 0.35, 0))
+	k.bob(body, 0.12, 1.6)
+	k.spin(body, Vector3.UP, 0.0)
+	M.add_mesh(body, lathe(pv([[0.0, 0.0], [0.34, 0.0], [0.38, 0.06], [0.44, 0.12], [0.47, 0.75], [0.4, 0.95], [0.2, 1.08], [0.15, 1.2], [0.14, 1.85], [0.2, 1.98], [0.26, 2.02], [0.0, 2.02]]), 48), k.mat(glaze))
+	k.eyes(body, Vector3(0, 0.6, -0.46), 0.16, 0.08, "fierce")
+	# the two phoenix handles
+	var phs: Array = []
+	for side in [-1.0, 1.0]:
+		var ph := k.node(body, Vector3(side * 0.2, 1.55, 0), Vector3(0, 0, side * -10))
+		phs.append(ph)
+		k.bob(ph, 0.05, 2.4, side)
+		M.add_mesh(ph, M.capsule(0.05, 0.4), k.mat(glaze), Vector3(side * 0.12, -0.05, 0), Vector3(0, 0, side * 50))
+		var head := k.node(ph, Vector3(side * 0.28, 0.12, -0.05))
+		M.add_mesh(head, M.sphere(0.11), k.mat(glaze), Vector3.ZERO)
+		M.add_mesh(head, M.prism(Vector3(0.06, 0.16, 0.06)), k.mat({"glaze": Color(0.95, 0.8, 0.4), "all": 1.0}), Vector3(side * 0.12, -0.02, -0.03), Vector3(0, 0, side * 90))
+		for c in 3:
+			M.add_mesh(head, M.prism(Vector3(0.04, 0.14, 0.03)), k.mat(glaze), Vector3(side * (-0.03 - c * 0.04), 0.12, 0), Vector3(0, 0, side * (20 + c * 20)))
+		for e in [-1.0, 1.0]:
+			M.add_mesh(head, M.sphere(0.025), M.glow(Color(0.9, 0.15, 0.1) if k.enemy else Color(0.05, 0.04, 0.06), 1.0 if k.enemy else 0.0), Vector3(side * 0.06, 0.03, e * 0.08))
+	k.muzzle(body, Vector3(0, 1.55, -0.3))
+	var wind := M.particles(Color(0.6, 1.0, 0.75, 0.6), 30, 1.2, 0.16, 1.5, Vector3.UP, 12, Vector3.ZERO, 0.6)
+	wind.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	wind.emission_ring_axis = Vector3.UP
+	wind.emission_ring_radius = 0.7
+	wind.emission_ring_inner_radius = 0.55
+	wind.emission_ring_height = 0.05
+	wind.tangential_accel_min = 3.0
+	wind.tangential_accel_max = 5.0
+	wind.position = Vector3(0, -0.2, 0)
+	body.add_child(wind)
+	k.root.set_meta("parts", {"body": body, "phoenixes": phs})
 	k.root.set_meta("height", 2.5)
+	k.root.set_meta("radius", 0.7)
+
+
+# --- 曜变盏 Yohen Bowl: a Jian tea bowl holding a whole starry sky --------------------------------
+static func _yohen_bowl(k: Kit) -> void:
+	var black := Color(0.05, 0.035, 0.035)
+	var body := k.node(k.root, Vector3(0, 0.55, 0))
+	k.bob(body, 0.14, 1.1)
+	var tilt := k.node(body, Vector3.ZERO, Vector3(-38, 0, 0))
+	var parts := vessel(pv([[0.0, 0.0], [0.22, 0.0], [0.25, 0.12], [0.3, 0.16], [0.55, 0.35], [0.74, 0.62], [0.72, 0.7], [0.78, 0.78]]), 0.05)
+	M.add_mesh(tilt, parts[0], k.mat({"glaze": black, "glaze2": Color(0.5, 0.28, 0.12), "pattern": 8, "all": 1.0, "body": Color(0.3, 0.2, 0.15), "gloss": 0.08}))
+	M.add_mesh(tilt, parts[1], k.mat({"glaze": black, "glaze2": Color(0.15, 0.25, 0.7), "pattern": 6, "pscale": 7.0, "all": 1.0, "body": black, "gloss": 0.05}))
+	M.add_mesh(tilt, parts[2], M.brass(Color(0.85, 0.65, 0.35), 0.3))
+	# the eye at the bottom of the bowl
+	var iris := M.add_mesh(tilt, M.sphere(0.2, 24, 12), M.glow(Color(0.55, 0.35, 1.0), 3.0), Vector3(0, 0.12, 0), Vector3.ZERO, Vector3(1, 0.35, 1))
+	M.add_mesh(tilt, M.sphere(0.09, 16, 8), M.glow(Color(0.9, 0.1, 0.1) if k.enemy else Color(0.02, 0.01, 0.05), 2.0 if k.enemy else 0.0), Vector3(0, 0.17, 0), Vector3.ZERO, Vector3(1, 0.4, 1))
+	k.bob(iris, 0.015, 3.0)
+	var stars := M.particles(Color(0.7, 0.8, 1.0, 0.9), 30, 1.8, 0.09, 0.5, Vector3.UP, 25, Vector3.ZERO, 0.45)
+	stars.position = Vector3(0, 0.3, 0)
+	tilt.add_child(stars)
+	var orbit := k.node(body, Vector3(0, 0.3, 0))
+	for i in 5:
+		var a := TAU * i / 5.0
+		M.add_mesh(orbit, M.sphere(0.06), M.glow(Color(0.5 + 0.1 * i, 0.4, 1.0), 4.0), Vector3(cos(a), 0.1 * sin(a * 2.0), sin(a)) * 1.0)
+	k.spin(orbit, Vector3.UP, -70.0)
+	k.muzzle(body, Vector3(0, 0.6, -0.4))
+	k.root.set_meta("parts", {"body": body, "tilt": tilt})
+	k.root.set_meta("height", 1.9)
+	k.root.set_meta("radius", 0.85)
+
+
+# --- The Unmended King: a towering broken vase whose cracks bleed red ------------------
+static func _boss(k: Kit) -> void:
+	k.core = Color(1.0, 0.15, 0.1)
+	var body := k.node(k.root, Vector3.ZERO)
+	k.bob(body, 0.06, 0.8)
+	var mats: Array = []
+	var profile := [[0.55, 0.3], [0.8, 0.8], [0.95, 1.3], [0.85, 1.8], [0.55, 2.25], [0.4, 2.6], [0.5, 2.9]]
+	for i in profile.size():
+		var m := k.p(0.0, 1.0, 2.2, Color(0.1, 0.08, 0.1))
+		mats.append(m)
+		# gaps: some rings are chipped away on one side
+		var seg := M.add_mesh(body, M.sphere(profile[i][0], 28, 10), m, Vector3(0, profile[i][1], 0), Vector3(0, i * 37, 0), Vector3(1, 0.55, 1))
+		if i in [2, 4]:
+			seg.scale = Vector3(1, 0.55, 0.8)
+	# cobalt dragon band painted around the belly
+	M.add_mesh(body, M.torus(0.93, 1.0, 64), M.porcelain(Color(0.07, 0.17, 0.55), 0.0, k.core, 1.0, 4.0, 0.0), Vector3(0, 1.3, 0))
+	# the mouth: a glowing red throat
+	M.add_mesh(body, M.torus(0.38, 0.55, 48), k.p(0.0, 1.0, 3.0, Color(0.1, 0.08, 0.1)), Vector3(0, 3.05, 0))
+	M.add_mesh(body, M.cylinder(0.38, 0.38, 0.05, 32), M.glow(k.core, 6.0), Vector3(0, 3.02, 0))
+	var throat := M.particles(Color(1.0, 0.25, 0.15, 0.9), 40, 1.2, 0.35, 1.5, Vector3.UP, 20, Vector3(0, 0.5, 0), 0.3)
+	throat.position = Vector3(0, 3.1, 0)
+	body.add_child(throat)
+	k.eyes(body, Vector3(0, 2.3, -0.5), 0.2, 0.09)
+	var heart := OmniLight3D.new()
+	heart.light_color = k.core
+	heart.light_energy = 2.5
+	heart.omni_range = 5.0
+	heart.position = Vector3(0, 1.5, -1.2)
+	body.add_child(heart)
+	# orbiting shards it refuses to put back
+	var orbits: Array = []
+	for ring_i in 2:
+		var orbit := k.node(body, Vector3(0, 1.2 + ring_i * 1.1, 0), Vector3(15 - ring_i * 30, 0, 10))
+		orbits.append(orbit)
+		for i in 7:
+			var a := TAU * i / 7.0
+			var shard := M.add_mesh(orbit, M.prism(Vector3(0.35, 0.5, 0.06)), k.p(0.0, 1.0, 4.0, Color(0.1, 0.08, 0.1)),
+				Vector3(cos(a), 0.15 * sin(a * 3.0), sin(a)) * (1.6 + ring_i * 0.3), Vector3(randf() * 60, rad_to_deg(-a), randf() * 60))
+			k.bob(shard, 0.12, 1.5 + i * 0.2, i)
+		k.spin(orbit, Vector3.UP, 30.0 * (1 if ring_i == 0 else -1))
+	for m in k.root.get_meta("porcelain"):
+		m.set_shader_parameter("gold", Color(0.75, 0.08, 0.05))
+		m.set_shader_parameter("damage", 0.35)
+	k.muzzle(body, Vector3(0, 3.0, -0.3))
+	k.root.set_meta("parts", {"body": body, "orbits": orbits})
+	k.root.set_meta("height", 3.3)
+	k.root.set_meta("radius", 1.2)
+
+
+# --- Imported glTF creatures ---------------------------------------------------------
+static func _from_gltf(k: Kit, scene: PackedScene, target_height: float) -> void:
+	var pivot := k.node(k.root, Vector3.ZERO, Vector3(0, 180, 0))  # glTF faces +Z, we face -Z
+	var inst := scene.instantiate() as Node3D
+	pivot.add_child(inst)
+	var meshes: Array = []
+	_collect(inst, meshes)
+	# bounds in `inst` space
+	var box := AABB()
+	var first := true
+	for mi in meshes:
+		var xf := _relative_xform(mi, inst)
+		var b: AABB = xf * mi.get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	var s := target_height / maxf(box.size.y, 0.001)
+	inst.scale = Vector3.ONE * s
+	var c := box.get_center()
+	inst.position = Vector3(-c.x * s, -box.position.y * s, -c.z * s)
+	# re-glaze: dip each mesh up to ~45% of its own height
+	for mi in meshes:
+		var ab: AABB = mi.get_aabb()
+		var dip := ab.position.y + ab.size.y * 0.45
+		# ~3 kintsugi cells per metre, expressed in this mesh's local units
+		var local_to_world := s * _xform_scale(mi, inst)
+		var m := k.p(dip, 0.0, 3.0 * local_to_world)
+		m.set_shader_parameter("drip", 0.12 / maxf(local_to_world, 0.0001))
+		mi.material_override = m
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	var ap := _find_player(inst)
+	if ap:
+		var map := {}
+		var names := ap.get_animation_list()
+		for role in ANIM_KEYS:
+			for key in ANIM_KEYS[role]:
+				for n in names:
+					if not map.has(role) and String(n).to_lower().contains(key):
+						map[role] = n
+		if not map.has("idle") and names.size() > 0:
+			map["idle"] = names[0]
+		if map.has("idle"):
+			ap.get_animation(map["idle"]).loop_mode = Animation.LOOP_LINEAR
+		k.root.set_meta("anim_player", ap)
+		k.root.set_meta("anims", map)
+	k.muzzle(k.root, Vector3(0, target_height * 0.7, -0.5))
+	k.root.set_meta("height", target_height)
+	k.root.set_meta("radius", clampf(maxf(box.size.x, box.size.z) * s * 0.45, 0.6, 1.3))
+	var aura := M.particles(k.core, 20, 1.6, 0.14, 0.5, Vector3.UP, 60, Vector3(0, 0.2, 0), 0.7)
+	aura.position = Vector3(0, target_height * 0.4, 0)
+	k.root.add_child(aura)
+
+
+static func _collect(n: Node, out: Array) -> void:
+	if n is MeshInstance3D and n.mesh:
+		out.append(n)
+	for c in n.get_children():
+		_collect(c, out)
+
+
+static func _relative_xform(n: Node3D, ancestor: Node3D) -> Transform3D:
+	var xf := Transform3D.IDENTITY
+	var cur: Node = n
+	while cur and cur != ancestor:
+		if cur is Node3D:
+			xf = (cur as Node3D).transform * xf
+		cur = cur.get_parent()
+	return xf
+
+
+static func _xform_scale(n: Node3D, ancestor: Node3D) -> float:
+	return _relative_xform(n, ancestor).basis.get_scale().y
+
+
+static func _find_player(n: Node) -> AnimationPlayer:
+	if n is AnimationPlayer:
+		return n
+	for c in n.get_children():
+		var r := _find_player(c)
+		if r:
+			return r
+	return null
+
+
+# --- 长沙窑诗文壶 Changsha Poem Ewer: a melon-bellied Tang ewer with a poem on its side ------------
+static func _changsha_ewer(k: Kit) -> void:
+	var straw := Color(0.8, 0.74, 0.46)
+	var brown := Color(0.42, 0.24, 0.1)
+	var green := Color(0.3, 0.52, 0.26)
+	var glaze := {"glaze": straw, "all": 1.0, "body": straw, "pattern": 2, "glaze2": brown, "glaze3": green, "pscale": 2.5, "crack": 2.6}
+	var body := k.node(k.root, Vector3.ZERO)
+	k.bob(body, 0.05, 1.9)
+	# melon-lobed belly, short neck, trumpet mouth
+	var pot := k.node(body, Vector3(0, 0.1, 0))
+	M.add_mesh(pot, lathe(pv([[0.0, 0.0], [0.34, 0.0], [0.4, 0.06], [0.66, 0.35], [0.72, 0.62], [0.6, 0.95], [0.3, 1.12], [0.24, 1.3], [0.34, 1.52], [0.36, 1.56], [0.0, 1.56]]), 56, 8, 0.05), k.mat(glaze))
+	# the short polygonal spout (a projectile muzzle) and a strap handle
+	var spout := k.node(pot, Vector3(0.6, 0.82, -0.2), Vector3(0, 0, -55))
+	M.add_mesh(spout, M.cylinder(0.09, 0.12, 0.42, 8), k.mat(glaze), Vector3(0, 0.18, 0))
+	k.muzzle(spout, Vector3(0, 0.42, 0))
+	var handle := k.node(pot, Vector3(-0.55, 0.95, 0.2))
+	M.add_mesh(handle, M.torus(0.2, 0.28, 24), k.mat(glaze), Vector3.ZERO, Vector3(90, 0, 0), Vector3(1, 1, 1.3))
+	# brown splashes and the poem, written down its side
+	for i in 3:
+		var a := -0.9 + i * 0.9
+		M.add_mesh(pot, M.sphere(0.12, 12, 6), k.mat({"glaze": [brown, green, brown][i], "all": 1.0}), Vector3(sin(a) * 0.7, 0.45, cos(a) * -0.7 + 0.05), Vector3.ZERO, Vector3(1, 1.4, 0.2))
+	var poem := Label3D.new()
+	poem.text = "君\n生\n我\n未\n生"
+	poem.font = M.ui_font()
+	poem.font_size = 40
+	poem.pixel_size = 0.004
+	poem.modulate = brown
+	poem.outline_size = 0
+	poem.position = Vector3(-0.42, 0.6, -0.58)
+	poem.rotation_degrees = Vector3(0, -35, 0)
+	pot.add_child(poem)
+	k.eyes(pot, Vector3(0, 0.78, -0.72), 0.16, 0.1, "happy")
+	k.blush(pot, Vector3(0, 0.64, -0.74), 0.26, 0.06)
+	# a writing brush it holds like a staff
+	var arm := k.node(pot, Vector3(0.72, 0.45, -0.25), Vector3(0, 0, -25))
+	M.add_mesh(arm, M.capsule(0.08, 0.35), k.mat(glaze), Vector3(0, -0.1, 0))
+	var brush := k.node(arm, Vector3(0, -0.2, -0.1))
+	M.add_mesh(brush, M.cylinder(0.025, 0.025, 0.9), M.brass(Color(0.35, 0.22, 0.12), 0.6), Vector3(0, 0.3, 0))
+	M.add_mesh(brush, M.sphere(0.07), k.mat({"glaze": Color(0.08, 0.06, 0.05), "all": 1.0}), Vector3(0, 0.8, 0), Vector3.ZERO, Vector3(1, 1.8, 1))
+	k.bob(arm, 0.05, 1.6, 0.8)
+	var ink := M.particles(Color(0.25, 0.15, 0.08, 0.8), 12, 1.4, 0.08, 0.4, Vector3.UP, 40, Vector3(0, 0.3, 0), 0.3)
+	ink.position = Vector3(0, 1.6, 0)
+	pot.add_child(ink)
+	k.root.set_meta("parts", {"body": body, "pot": pot, "spout": spout, "arm": arm, "brush": brush})
+	k.root.set_meta("height", 1.85)
+	k.root.set_meta("radius", 0.85)
+
+
+# --- 瓷母 Mother of Porcelain: Qianlong's vase of seventeen glazes, band upon band --------------
+static func _cimu(k: Kit) -> void:
+	var body := k.node(k.root, Vector3.ZERO)
+	k.bob(body, 0.04, 1.2)
+	# the profile is split into bands, each fired in a different glaze
+	var prof := [[0.3, 0.0], [0.42, 0.08], [0.5, 0.22], [0.66, 0.5], [0.74, 0.78], [0.7, 1.02], [0.56, 1.26], [0.36, 1.5], [0.28, 1.72], [0.34, 1.94], [0.42, 2.06]]
+	# bottom to top: Jun flambé, cobalt, turquoise, celadon, famille-rose (the face band),
+	# imperial yellow, powder blue, tea-dust, Ru sky-blue, faux-bronze
+	var bands := [
+		{"glaze": Color(0.6, 0.1, 0.12), "all": 1.0, "pattern": 1, "glaze2": Color(0.45, 0.25, 0.65), "body": Color(0.6, 0.1, 0.12)},
+		{"glaze": Color(0.08, 0.2, 0.62), "all": 1.0, "body": Color(0.08, 0.2, 0.62)},
+		{"glaze": Color(0.18, 0.66, 0.66), "all": 1.0, "body": Color(0.18, 0.66, 0.66)},
+		{"glaze": Color(0.45, 0.66, 0.48), "all": 1.0, "pattern": 3, "pscale": 8.0, "body": Color(0.45, 0.66, 0.48)},
+		{"glaze": Color(0.98, 0.84, 0.86), "all": 1.0, "body": Color(0.98, 0.84, 0.86)},
+		{"glaze": Color(0.98, 0.8, 0.18), "all": 1.0, "body": Color(0.98, 0.8, 0.18)},
+		{"glaze": Color(0.2, 0.38, 0.75), "all": 1.0, "pattern": 6, "body": Color(0.2, 0.38, 0.75)},
+		{"glaze": Color(0.42, 0.42, 0.18), "all": 1.0, "body": Color(0.42, 0.42, 0.18)},
+		{"glaze": Color(0.6, 0.76, 0.8), "all": 1.0, "pattern": 3, "pscale": 6.0, "body": Color(0.6, 0.76, 0.8)},
+		{"glaze": Color(0.45, 0.28, 0.12), "all": 1.0, "body": Color(0.45, 0.28, 0.12)},
+	]
+	var vase := k.node(body, Vector3(0, 0.05, 0))
+	for i in prof.size() - 1:
+		M.add_mesh(vase, lathe(pv([prof[i], prof[i + 1]]), 56), k.mat(bands[i % bands.size()]))
+		# a thin gold line between bands
+		M.add_mesh(vase, M.torus(float(prof[i + 1][0]) - 0.01, float(prof[i + 1][0]) + 0.02, 48), M.brass(Color(1.0, 0.8, 0.35), 0.25), Vector3(0, float(prof[i + 1][1]), 0))
+	M.add_mesh(vase, M.cylinder(0.0, 0.42, 0.02, 40), k.mat({"glaze": Color(0.1, 0.06, 0.05), "all": 1.0}), Vector3(0, 2.06, 0))
+	# a revolving band of glaze (the 转心 trick) around her waist
+	var ring := k.node(vase, Vector3(0, 0.9, 0))
+	M.add_mesh(ring, M.torus(0.78, 0.86, 64), k.mat({"glaze": Color(0.95, 0.8, 0.3), "all": 1.0, "pattern": 7, "glaze2": Color(0.8, 0.2, 0.2), "glaze3": Color(0.2, 0.5, 0.8)}))
+	k.spin(ring, Vector3.UP, 35.0)
+	# gilded dragon-loop handles
+	for side in [-1.0, 1.0]:
+		var h := k.node(vase, Vector3(side * 0.42, 1.62, 0))
+		M.add_mesh(h, M.torus(0.1, 0.15, 20), M.brass(Color(1.0, 0.78, 0.3), 0.25), Vector3.ZERO, Vector3(0, 0, 90))
+		k.bob(h, 0.03, 2.0, side)
+	k.eyes(vase, Vector3(0, 1.28, -0.58), 0.15, 0.09, "happy")
+	k.blush(vase, Vector3(0, 1.17, -0.62), 0.26, 0.06)
+	k.muzzle(vase, Vector3(0, 2.1, 0))
+	var sparkle := M.particles(Color(1.0, 0.85, 0.45, 0.9), 20, 1.6, 0.08, 0.4, Vector3.UP, 180, Vector3(0, 0.2, 0), 0.9)
+	sparkle.position = Vector3(0, 1.0, 0)
+	vase.add_child(sparkle)
+	k.root.set_meta("parts", {"body": body, "vase": vase, "ring": ring})
+	k.root.set_meta("height", 2.25)
+	k.root.set_meta("radius", 0.9)
+
+
+# --- 甜白僧帽壶 Sweet-White Monk's Cap: a sugar-white Yongle ewer with a monk's-cap rim ------------
+static func _monk_cap(k: Kit) -> void:
+	var sweet := Color(0.98, 0.97, 0.92)
+	var white := {"glaze": sweet, "all": 1.0, "body": sweet, "crack": 2.4, "gloss": 0.05}
+	var body := k.node(k.root, Vector3.ZERO)
+	k.bob(body, 0.04, 1.4)
+	var pot := k.node(body, Vector3(0, 0.08, 0))
+	M.add_mesh(pot, lathe(pv([[0.0, 0.0], [0.38, 0.0], [0.44, 0.06], [0.6, 0.3], [0.64, 0.62], [0.54, 0.86], [0.36, 1.0], [0.3, 1.12], [0.0, 1.12]]), 56), k.mat(white))
+	# the monk's cap: a stepped, petal-edged rim rising at the back
+	var cap := k.node(pot, Vector3(0, 1.1, 0))
+	k.bob(cap, 0.02, 2.2)
+	M.add_mesh(cap, lathe(pv([[0.0, 0.0], [0.36, 0.0], [0.42, 0.1], [0.36, 0.16], [0.0, 0.16]]), 48, 6, 0.08), k.mat(white))
+	M.add_mesh(cap, M.prism(Vector3(0.5, 0.36, 0.08)), k.mat(white), Vector3(0, 0.3, 0.22), Vector3(-10, 0, 0))
+	# the flat duck-bill spout at the front
+	M.add_mesh(cap, M.prism(Vector3(0.22, 0.46, 0.05)), k.mat(white), Vector3(0, 0.12, -0.46), Vector3(-80, 0, 0))
+	# a strap handle and a small gold shield that orbits it
+	M.add_mesh(pot, M.torus(0.18, 0.25, 24), k.mat(white), Vector3(0, 0.78, 0.6), Vector3(0, 90, 0), Vector3(1, 1.4, 1))
+	var orbit := k.node(pot, Vector3(0, 0.55, 0))
+	k.spin(orbit, Vector3.UP, 60.0)
+	var disc := k.node(orbit, Vector3(0.95, 0, 0), Vector3(0, 0, 90))
+	M.add_mesh(disc, M.cylinder(0.2, 0.2, 0.03, 32), M.glow(Color(1.0, 0.78, 0.3), 1.2))
+	M.add_mesh(disc, M.torus(0.17, 0.21, 32), M.glow(Color(1.0, 0.85, 0.4), 2.0), Vector3(0, 0.02, 0))
+	k.eyes(pot, Vector3(0, 0.66, -0.66), 0.17, 0.09, "sleepy")
+	k.blush(pot, Vector3(0, 0.54, -0.66), 0.28, 0.06)
+	for side in [-1.0, 1.0]:
+		var hand := k.node(pot, Vector3(side * 0.66, 0.45, -0.15), Vector3(0, 0, side * -25))
+		M.add_mesh(hand, M.capsule(0.08, 0.3), k.mat(white), Vector3(0, -0.08, 0))
+		k.bob(hand, 0.04, 1.4, side)
+	k.muzzle(cap, Vector3(0, 0.12, -0.7))
+	k.root.set_meta("parts", {"body": body, "pot": pot, "cap": cap, "orbit": orbit})
+	k.root.set_meta("height", 1.75)
 	k.root.set_meta("radius", 0.8)

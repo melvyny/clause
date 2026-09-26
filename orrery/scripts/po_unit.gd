@@ -6,6 +6,8 @@ extends Node3D
 const Data = preload("po_data.gd")
 const M = preload("po_mat.gd")
 const Builder = preload("po_monster_builder.gd")
+const I18n = preload("po_i18n.gd")
+const Anims = preload("po_anims.gd")
 
 var species_id := ""
 var species: Dictionary = {}
@@ -22,9 +24,21 @@ var statuses: Array = []     # [{id, turns}]
 var alive := true
 var skills: Array = []
 var energy := 0.0
-var mark := -1               # element Mark left by the last attacker (Element Fission)
-var mark_turns := 0
+var ult_cost := 100.0
+var upgrades: Array = []     # upgrade ids (see Data.SPECIES[..].upgrades)
+var toughness := 100.0       # 胎厚: crack needed to break this figure
+var crack := 0.0             # 裂纹: builds up from hits, heals mend it
+var broken := false          # 崩裂: vulnerable until its next turn starts
+var shield := 0.0            # 金釉护盾: absorbs damage before HP
+var intent: Dictionary = {}  # enemies telegraph their next action: {skill, target}
+var chain := 0               # 相生 links of this unit's current action
+var passive_value := 0.0
 var is_boss := false
+var uid := -1                # run creature id (allies only)
+var mends := 0               # gold seams from previous repairs
+var scars: Array = []        # scar ids (see Data.SCARS)
+var death_cause := {}        # how it broke: {element, crit, dot, cc}
+const PLINTH_H := 0.2
 var passive_id := ""
 var home := Vector3.ZERO
 var home_basis := Basis.IDENTITY
@@ -43,38 +57,47 @@ var _arrow: Node3D
 var _arrow_mesh: MeshInstance3D
 var _highlight := 0
 var _porcelain: Array = []
+var _bob_paused := {}        # parts currently driven by a signature move
 var _shown_damage := 0.0
 
 
 func setup(p_species: String, p_team: int, p_level: int, p_stats: Dictionary, name_prefix: String = "") -> void:
 	species_id = p_species
-	species = Data.SPECIES[p_species]
-	display_name = (name_prefix + species.name).strip_edges()
+	species = Data.species_info(p_species)
+	display_name = (name_prefix + I18n.f(species, "name")).strip_edges()
 	element = species.element
 	team = p_team
 	level = p_level
 	stats = p_stats
 	max_hp = float(stats.hp)
 	hp = max_hp
-	skills = species.skills
+	skills = Data.build_skills(p_species, upgrades)
+	toughness = float(stats.get("toughness", 100.0))
 	passive_id = species.passive.id
+	passive_value = Data.passive_value(p_species, upgrades, 10.0)
 	energy = Data.ENERGY_START
 	name = "%s_%s" % ["Ally" if team == 0 else "Enemy", p_species]
 
 
 func _ready() -> void:
 	model = Builder.build(species_id, team == 1)
-	add_child(model)
-	model_height = model.get_meta("height", 2.0)
+	# every figure stands on a glazed porcelain plinth, like a display piece
+	var stand := Node3D.new()
+	stand.position.y = PLINTH_H
+	add_child(stand)
+	stand.add_child(model)
+	model_height = model.get_meta("height", 2.0) + PLINTH_H
 	pick_radius = model.get_meta("radius", 0.8)
-	muzzle = model.get_meta("muzzle", null)
+	muzzle = model.get_meta("muzzle") if model.has_meta("muzzle") else null
 	if is_boss:
 		model.scale = Vector3.ONE * 1.35
-		model_height *= 1.35
+		model_height = (model_height - PLINTH_H) * 1.35 + PLINTH_H
 		pick_radius *= 1.3
 	for entry in model.get_meta("bobbers"):
 		_base_positions[entry[0]] = entry[0].position
 	_porcelain = model.get_meta("porcelain", [])
+	set_mends(mends)
+	play_anim("idle")
 	_collect_meshes(model)
 	_flash_mat = StandardMaterial3D.new()
 	_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -94,12 +117,14 @@ func _ready() -> void:
 	body.add_child(shape)
 	add_child(body)
 
-	# Element base disc.
+	# Porcelain plinth glazed in the element colour, with a gold lip.
 	var ecol: Color = Data.ELEMENT_COLORS[element]
-	M.add_mesh(self, M.cylinder(pick_radius + 0.25, pick_radius + 0.25, 0.02, 40),
-		M.glow(ecol, 1.2, 0.25), Vector3(0, 0.02, 0))
-	M.add_mesh(self, M.torus(pick_radius + 0.22, pick_radius + 0.3), M.glow(ecol, 2.5, 0.8), Vector3(0, 0.03, 0))
-	_active_ring = M.add_mesh(self, M.torus(pick_radius + 0.4, pick_radius + 0.5), M.glow(Color(1.0, 0.85, 0.35), 4.0), Vector3(0, 0.05, 0))
+	var pr := pick_radius + 0.25
+	var plinth_mat := M.porcelain(Builder.GLAZES[element], 0.05, ecol, 0.0, 2.5, 0.012)
+	M.add_mesh(self, M.cylinder(pr, pr + 0.1, PLINTH_H, 40), plinth_mat, Vector3(0, PLINTH_H * 0.5, 0))
+	M.add_mesh(self, M.torus(pr - 0.05, pr + 0.02, 64), M.brass(), Vector3(0, PLINTH_H, 0))
+	M.add_mesh(self, M.torus(pr + 0.1, pr + 0.16), M.glow(ecol, 2.5, 0.8), Vector3(0, 0.03, 0))
+	_active_ring = M.add_mesh(self, M.torus(pick_radius + 0.45, pick_radius + 0.55), M.glow(Color(1.0, 0.85, 0.35), 4.0), Vector3(0, 0.05, 0))
 	_active_ring.visible = false
 	_target_ring = M.add_mesh(self, M.torus(pick_radius + 0.55, pick_radius + 0.68, 6), M.glow(Color(1, 1, 1), 3.0), Vector3(0, 0.06, 0))
 	_target_ring.visible = false
@@ -130,8 +155,13 @@ func _process(delta: float) -> void:
 			node.rotate_object_local(entry[1], deg_to_rad(entry[2]) * delta)
 	for entry in model.get_meta("bobbers"):
 		var node: Node3D = entry[0]
+		if _bob_paused.has(node):
+			continue
 		node.position.y = _base_positions[node].y + sin(_time * entry[2] + entry[3]) * entry[1]
-	var dmg := 1.0 - hp_ratio() if alive else 1.0
+	# the kintsugi seams glow as HP drops, and the glaze visibly cracks as crack builds
+	var dmg := maxf(1.0 - hp_ratio(), crack_ratio() * 0.85) if alive else 1.0
+	if broken and alive:
+		dmg = 1.0
 	if absf(dmg - _shown_damage) > 0.002:
 		_shown_damage = lerpf(_shown_damage, dmg, minf(1.0, delta * 4.0))
 		for m in _porcelain:
@@ -152,6 +182,41 @@ func _process(delta: float) -> void:
 				_arrow.look_at(look, Vector3.UP)
 
 
+## Plays a clip on imported glTF creatures (no-op for procedural models).
+## Non-idle clips fall back to idle when they finish.
+func play_anim(role: String) -> bool:
+	if not model.has_meta("anim_player"):
+		return false
+	var ap: AnimationPlayer = model.get_meta("anim_player")
+	var map: Dictionary = model.get_meta("anims", {})
+	if not map.has(role):
+		return false
+	ap.play(map[role], 0.15)
+	if role != "idle" and role != "death" and map.has("idle"):
+		ap.queue(map["idle"])
+	return true
+
+
+## Signature moves take over a part: stop its idle bob while they animate it.
+func pause_bob(node: Node3D, paused: bool) -> void:
+	if paused:
+		_bob_paused[node] = true
+	else:
+		_bob_paused.erase(node)
+		if _base_positions.has(node):
+			node.position = _base_positions[node]
+
+
+func set_mends(n: int) -> void:
+	mends = n
+	for m in _porcelain:
+		m.set_shader_parameter("mended", float(n))
+
+
+func has_scar(id: String) -> bool:
+	return id in scars
+
+
 # --- Stats ------------------------------------------------------------------------
 func eff_atk() -> float:
 	return float(stats.atk) * (1.0 + (Data.ATK_UP if has_status("atk_up") else 0.0))
@@ -167,7 +232,11 @@ func eff_def() -> float:
 
 
 func eff_spd() -> float:
-	return float(stats.spd)
+	return float(stats.spd) * (1.0 - (Data.SLOW if has_status("slow") else 0.0))
+
+
+func crack_ratio() -> float:
+	return 1.0 if broken else clampf(crack / maxf(toughness, 1.0), 0.0, 1.0)
 
 
 func hp_ratio() -> float:
@@ -223,10 +292,6 @@ func tick_statuses() -> void:
 	for s in statuses:
 		s.turns -= 1
 	statuses = statuses.filter(func(s): return s.turns > 0)
-	if mark >= 0:
-		mark_turns -= 1
-		if mark_turns <= 0:
-			mark = -1
 
 
 func gain_energy(amount: float) -> void:
@@ -234,7 +299,7 @@ func gain_energy(amount: float) -> void:
 
 
 func ultimate_ready() -> bool:
-	return energy >= 100.0
+	return energy >= ult_cost
 
 
 # --- Visual state -----------------------------------------------------------------
@@ -281,6 +346,7 @@ func reset_facing() -> void:
 
 # --- Animations (awaitable) -------------------------------------------------------
 func anim_lunge(target_pos: Vector3) -> void:
+	play_anim("attack")
 	var dir := (target_pos - global_position)
 	dir.y = 0
 	var dist := maxf(dir.length() - 1.6, 0.5)
@@ -300,6 +366,8 @@ func anim_return() -> void:
 
 
 func anim_cast() -> void:
+	if not play_anim("cast"):
+		play_anim("attack")
 	var t := create_tween().set_trans(Tween.TRANS_SINE)
 	var s0 := model.scale
 	t.tween_property(model, "scale", s0 * Vector3(1.12, 0.9, 1.12), 0.12)
@@ -311,6 +379,8 @@ func anim_cast() -> void:
 
 
 func anim_ultimate() -> void:
+	if not play_anim("cast"):
+		play_anim("attack")
 	var s0 := model.scale
 	var t := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	t.tween_property(model, "position:y", 1.3, 0.45)
@@ -324,6 +394,9 @@ func anim_ultimate() -> void:
 
 
 func anim_hit(crit: bool) -> void:
+	play_anim("hit")
+	if alive:
+		Anims.hit(self, crit)
 	for mi in _meshes:
 		if is_instance_valid(mi):
 			mi.material_overlay = _flash_mat
@@ -346,6 +419,8 @@ func anim_death() -> void:
 	set_active(false)
 	set_target_highlight(0)
 	var t := create_tween().set_trans(Tween.TRANS_QUAD)
+	if play_anim("death"):
+		t.tween_interval(0.6)
 	t.tween_property(model, "rotation_degrees:z", 12.0, 0.12)
 	t.tween_property(model, "scale", model.scale * 1.08, 0.12)
 	await t.finished

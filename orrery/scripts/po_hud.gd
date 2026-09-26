@@ -1,21 +1,20 @@
 extends CanvasLayer
-## Porcelain Orrery :: battle HUD.
-## Everything is built in code: nameplates that follow units, turn-order
-## forecast, skill bar with damage preview, team portraits, combat log,
-## Element Fission legend, result screen and the Rune Board.
+## Goldmend :: battle HUD (bilingual, icon-first).
+## Three layers of information:
+##   1. always on screen: icons, bars and numbers only
+##   2. on hover: skill details, damage preview, status and unit info (tooltip)
+##   3. on demand: rules page (Five Phases, crack, chains, traits, controls) and the combat log
 
 const Data = preload("po_data.gd")
 const M = preload("po_mat.gd")
+const I18n = preload("po_i18n.gd")
+const Icons = preload("po_icons.gd")
+const Tip = preload("po_tip.gd")
 
 signal skill_pressed(index: int)
-signal portrait_pressed(unit: Node)
 signal auto_toggled
 signal speed_pressed
-signal runes_pressed
 signal console_pressed
-signal next_pressed
-signal retry_pressed
-signal rune_board_closed
 
 const BRASS := Color(0.9, 0.7, 0.38)
 const IVORY := Color(0.96, 0.94, 0.88)
@@ -25,36 +24,25 @@ const ENEMY_COL := Color(1.0, 0.38, 0.42)
 
 var battle: Node
 var root: Control
-var _plates := {}       # unit -> {root, hp, atb, en, status}
-var _portraits := {}    # unit -> {button, hp, en}
-var _ally_row: HBoxContainer
-var _enemy_row: HBoxContainer
+var _plates := {}       # unit -> {root, hp, shield, crack, atb, en, status, intent, key}
 var _order_row: HBoxContainer
-var _skill_row: HBoxContainer
 var _skill_buttons: Array = []
-var _desc: RichTextLabel
-var _desc_panel: PanelContainer
-var _hint: Label
+var _skill_cd: Array = []
+var _skill_ring: Array = []
 var _banner: Label
 var _sub_banner: Label
+var _log_panel: PanelContainer
 var _log: RichTextLabel
-var _wave_label: Label
+var _floor_label: Label
+var _relic_row: HBoxContainer
+var _trait_row: HBoxContainer
+var _enemy_trait_row: HBoxContainer
 var _auto_btn: Button
 var _speed_btn: Button
-var _legend: PanelContainer
-var _result: PanelContainer
-var _result_title: Label
-var _result_body: RichTextLabel
-var _board: PanelContainer
-var _profile
-var _board_mon := -1
-var _board_slot := -1
-var _roster_list: ItemList
-var _inv_list: ItemList
-var _inv_uids: Array = []
-var _slot_buttons: Array = []
-var _mon_info: RichTextLabel
-var _summon_btn: Button
+var _rules: PanelContainer
+var _tip: Tip
+var _skill_bar: HBoxContainer
+var _current: Node = null
 
 
 func _ready() -> void:
@@ -62,26 +50,18 @@ func _ready() -> void:
 	root = Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.theme = _make_theme()
+	root.theme = make_theme()
 	add_child(root)
+	_build_tip()
 	_build_top()
-	_build_bottom()
-	_build_center()
-	_build_legend()
-	_build_result()
-	_build_board()
-	_no_focus(root)
+	_build_skill_bar()
+	_build_banner()
+	_build_log()
+	_build_rules()
+	root.move_child(_tip, root.get_child_count() - 1)
 
 
-## Buttons must not steal keyboard focus (Space / 1-3 are battle hotkeys).
-func _no_focus(n: Node) -> void:
-	for c in n.get_children():
-		if c is BaseButton or c is ItemList:
-			c.focus_mode = Control.FOCUS_NONE
-		_no_focus(c)
-
-
-# --- Theme -----------------------------------------------------------------------
+# --- Theme -----------------------------------------------------------------------------
 static func _sb(bg: Color, border: Color, bw: int = 2, radius: int = 8, pad: int = 8) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = bg
@@ -94,7 +74,7 @@ static func _sb(bg: Color, border: Color, bw: int = 2, radius: int = 8, pad: int
 	return s
 
 
-func _make_theme() -> Theme:
+static func make_theme() -> Theme:
 	var t := Theme.new()
 	t.default_font = M.ui_font()
 	t.default_font_size = 16
@@ -114,11 +94,8 @@ func _make_theme() -> Theme:
 	t.set_color("font_outline_color", "Label", Color(0.02, 0.02, 0.06))
 	t.set_constant("outline_size", "Label", 4)
 	t.set_color("default_color", "RichTextLabel", IVORY)
-	t.set_stylebox("panel", "ItemList", _sb(Color(0.03, 0.03, 0.08, 0.9), BRASS.darkened(0.4), 1, 6, 6))
-	t.set_color("font_color", "ItemList", IVORY)
-	t.set_stylebox("selected", "ItemList", _sb(Color(0.35, 0.25, 0.1, 0.9), BRASS, 1, 4, 2))
-	t.set_stylebox("selected_focus", "ItemList", _sb(Color(0.35, 0.25, 0.1, 0.9), BRASS, 1, 4, 2))
-	t.set_stylebox("focus", "ItemList", StyleBoxEmpty.new())
+	t.set_stylebox("panel", "TooltipPanel", _sb(Color(0.03, 0.03, 0.09, 0.96), BRASS, 1, 8, 8))
+	t.set_color("font_color", "TooltipLabel", IVORY)
 	return t
 
 
@@ -148,317 +125,348 @@ func _bar(color: Color, height: float, back: Color = Color(0.05, 0.05, 0.1, 0.9)
 	return b
 
 
-func _ignore_all(n: Node) -> void:
-	for c in n.get_children():
-		if c is Control:
-			c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_ignore_all(c)
+func _icon(tex: Texture2D, size: float) -> TextureRect:
+	var r := TextureRect.new()
+	r.texture = tex
+	r.custom_minimum_size = Vector2(size, size)
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return r
 
 
-# --- Layout ------------------------------------------------------------------------
+## Round icon button with a hover tip.
+func _icon_button(tex: Texture2D, tip: Callable, size: float = 46.0) -> Button:
+	var b := Button.new()
+	b.icon = tex
+	b.expand_icon = true
+	b.custom_minimum_size = Vector2(size, size)
+	b.focus_mode = Control.FOCUS_NONE
+	var r := int(size / 2.0)
+	b.add_theme_stylebox_override("normal", _sb(Color(0.06, 0.06, 0.15, 0.9), BRASS.darkened(0.3), 2, r, 6))
+	b.add_theme_stylebox_override("hover", _sb(Color(0.16, 0.12, 0.3, 0.98), BRASS, 2, r, 6))
+	b.add_theme_stylebox_override("pressed", _sb(Color(0.3, 0.2, 0.1, 0.98), Color(1, 0.85, 0.5), 2, r, 6))
+	_hover(b, tip)
+	return b
+
+
+# --- Tooltip ---------------------------------------------------------------------------------
+func _build_tip() -> void:
+	_tip = Tip.new()
+	root.add_child(_tip)
+
+
+func show_tip(text: String, owner: Object = null) -> void:
+	_tip.show_text(text, owner)
+
+
+func hide_tip(owner: Object = null) -> void:
+	_tip.hide_for(owner)
+
+
+func _hover(c: Control, text_fn: Callable) -> void:
+	_tip.attach(c, text_fn)
+
+
+# --- Layout ----------------------------------------------------------------------------------
 func _build_top() -> void:
-	var top := HBoxContainer.new()
-	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	top.offset_left = 16
-	top.offset_right = -16
-	top.offset_top = 12
-	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(top)
-
-	var title_box := VBoxContainer.new()
-	title_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title_box.add_child(_label("瓷星召唤  PORCELAIN ORRERY", 20, BRASS))
-	_wave_label = _label("", 15)
-	title_box.add_child(_wave_label)
-	top.add_child(title_box)
-
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top.add_child(spacer)
+	var left := VBoxContainer.new()
+	left.position = Vector2(18, 12)
+	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_floor_label = _label("", 17, BRASS)
+	left.add_child(_floor_label)
+	_relic_row = HBoxContainer.new()
+	_relic_row.add_theme_constant_override("separation", 4)
+	left.add_child(_relic_row)
+	_trait_row = HBoxContainer.new()
+	_trait_row.add_theme_constant_override("separation", 4)
+	left.add_child(_trait_row)
+	root.add_child(left)
+	_enemy_trait_row = HBoxContainer.new()
+	_enemy_trait_row.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_enemy_trait_row.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_enemy_trait_row.offset_right = -18
+	_enemy_trait_row.offset_top = 70
+	_enemy_trait_row.add_theme_constant_override("separation", 4)
+	root.add_child(_enemy_trait_row)
 
 	var order_panel := PanelContainer.new()
+	order_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	order_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	order_panel.offset_top = 10
 	order_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var ob := HBoxContainer.new()
-	ob.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ob.add_theme_constant_override("separation", 6)
-	ob.add_child(_label("行动预测 ▸", 14, BRASS))
+	order_panel.add_theme_stylebox_override("panel", _sb(Color(0.03, 0.03, 0.09, 0.7), BRASS.darkened(0.4), 1, 30, 6))
 	_order_row = HBoxContainer.new()
+	_order_row.add_theme_constant_override("separation", 6)
 	_order_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_order_row.add_theme_constant_override("separation", 4)
-	ob.add_child(_order_row)
-	order_panel.add_child(ob)
-	top.add_child(order_panel)
-
-	var spacer2 := Control.new()
-	spacer2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	spacer2.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top.add_child(spacer2)
+	order_panel.add_child(_order_row)
+	root.add_child(order_panel)
 
 	var btns := HBoxContainer.new()
-	btns.add_theme_constant_override("separation", 6)
-	btns.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_auto_btn = Button.new()
-	_auto_btn.text = "自动 AUTO"
+	btns.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	btns.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	btns.offset_right = -16
+	btns.offset_top = 12
+	btns.add_theme_constant_override("separation", 8)
+	_auto_btn = _icon_button(Icons.tex("auto"), func(): return "[b]%s[/b]" % I18n.s("auto"))
 	_auto_btn.toggle_mode = true
 	_auto_btn.pressed.connect(func(): auto_toggled.emit())
-	_speed_btn = Button.new()
-	_speed_btn.text = "速度 x1"
+	_speed_btn = _icon_button(Icons.tex("speed"), func(): return "[b]%s[/b]" % I18n.s("speed", [int(Engine.time_scale)]))
 	_speed_btn.pressed.connect(func(): speed_pressed.emit())
-	var legend_btn := Button.new()
-	legend_btn.text = "裂变表"
-	legend_btn.pressed.connect(func(): _legend.visible = not _legend.visible)
-	var runes_btn := Button.new()
-	runes_btn.text = "符文 (R)"
-	runes_btn.pressed.connect(func(): runes_pressed.emit())
-	var console_btn := Button.new()
-	console_btn.text = "控制台 F1"
+	var rules := _icon_button(Icons.tex("book"), func(): return "[b]%s[/b]" % I18n.s("legend"))
+	rules.pressed.connect(toggle_rules)
+	var log_btn := _icon_button(Icons.tex("scroll"), func(): return "[b]%s[/b]" % I18n.s("log"))
+	log_btn.pressed.connect(func(): _log_panel.visible = not _log_panel.visible)
+	var console_btn := _icon_button(Icons.tex("gear"), func(): return "[b]%s[/b]" % I18n.s("console"))
 	console_btn.pressed.connect(func(): console_pressed.emit())
-	for b in [_auto_btn, _speed_btn, legend_btn, runes_btn, console_btn]:
+	for b in [_auto_btn, _speed_btn, rules, log_btn, console_btn]:
 		btns.add_child(b)
-	top.add_child(btns)
-
-	_enemy_row = HBoxContainer.new()
-	_enemy_row.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_enemy_row.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_enemy_row.offset_top = 86
-	_enemy_row.offset_right = -16
-	_enemy_row.add_theme_constant_override("separation", 6)
-	_enemy_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(_enemy_row)
+	root.add_child(btns)
 
 
-func _build_bottom() -> void:
-	_ally_row = HBoxContainer.new()
-	_ally_row.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_ally_row.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_ally_row.offset_left = 16
-	_ally_row.offset_bottom = -16
-	_ally_row.add_theme_constant_override("separation", 6)
-	_ally_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(_ally_row)
+func toggle_rules() -> void:
+	_rules.visible = not _rules.visible
 
-	var center := VBoxContainer.new()
-	center.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	center.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	center.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	center.offset_bottom = -16
-	center.alignment = BoxContainer.ALIGNMENT_END
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(center)
-	_hint = _label("", 17, Color(1, 0.9, 0.6))
-	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	center.add_child(_hint)
-	_desc_panel = PanelContainer.new()
-	_desc_panel.custom_minimum_size = Vector2(660, 0)
-	_desc_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_desc = RichTextLabel.new()
-	_desc.bbcode_enabled = true
-	_desc.fit_content = true
-	_desc.scroll_active = false
-	_desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_desc.add_theme_font_size_override("normal_font_size", 15)
-	_desc_panel.add_child(_desc)
-	center.add_child(_desc_panel)
-	_skill_row = HBoxContainer.new()
-	_skill_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	_skill_row.add_theme_constant_override("separation", 10)
-	_skill_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	center.add_child(_skill_row)
+
+func _build_skill_bar() -> void:
+	_skill_bar = HBoxContainer.new()
+	_skill_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_skill_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_skill_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_skill_bar.offset_bottom = -24
+	_skill_bar.add_theme_constant_override("separation", 18)
+	_skill_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_skill_bar)
 	for i in 3:
+		var size := 96.0 if i == 2 else 84.0
+		var holder := Control.new()
+		holder.custom_minimum_size = Vector2(size, size)
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(210, 74)
-		b.add_theme_font_size_override("font_size", 17)
+		b.set_anchors_preset(Control.PRESET_FULL_RECT)
+		b.expand_icon = true
+		b.focus_mode = Control.FOCUS_NONE
 		b.pressed.connect(func(): skill_pressed.emit(i))
-		b.mouse_entered.connect(func(): _on_skill_hover(i))
-		_skill_row.add_child(b)
+		_hover(b, _skill_tip.bind(i))
+		holder.add_child(b)
+		# energy ring around the ultimate
+		var ring := TextureProgressBar.new()
+		ring.set_anchors_preset(Control.PRESET_FULL_RECT)
+		ring.texture_progress = Icons.tex("ring", Color(0, 0, 0, 0), int(size), "#ffc850")
+		ring.fill_mode = TextureProgressBar.FILL_CLOCKWISE
+		ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ring.visible = i == 2
+		holder.add_child(ring)
+		var cd := _label("", 34, IVORY)
+		cd.set_anchors_preset(Control.PRESET_FULL_RECT)
+		cd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cd.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		cd.add_theme_constant_override("outline_size", 10)
+		holder.add_child(cd)
+		var key := _label(str(i + 1), 13, BRASS)
+		key.position = Vector2(4, -2)
+		holder.add_child(key)
+		_skill_bar.add_child(holder)
 		_skill_buttons.append(b)
-	_desc_panel.visible = false
-	_skill_row.visible = false
-
-	var log_panel := PanelContainer.new()
-	log_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	log_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	log_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	log_panel.offset_right = -16
-	log_panel.offset_bottom = -16
-	log_panel.custom_minimum_size = Vector2(360, 170)
-	log_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_log = RichTextLabel.new()
-	_log.bbcode_enabled = true
-	_log.scroll_following = true
-	_log.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_log.add_theme_font_size_override("normal_font_size", 13)
-	log_panel.add_child(_log)
-	root.add_child(log_panel)
+		_skill_cd.append(cd)
+		_skill_ring.append(ring)
+	_skill_bar.visible = false
 
 
-func _build_center() -> void:
+func _build_banner() -> void:
 	_banner = _label("", 40, BRASS)
 	_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_banner.offset_top = 150
+	_banner.offset_top = 130
 	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_banner.add_theme_constant_override("outline_size", 10)
 	_banner.modulate.a = 0.0
 	root.add_child(_banner)
-	_sub_banner = _label("", 20)
+	_sub_banner = _label("", 18)
 	_sub_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_sub_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_sub_banner.offset_top = 205
+	_sub_banner.offset_top = 184
 	_sub_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_sub_banner.modulate.a = 0.0
 	root.add_child(_sub_banner)
 
 
-func _build_legend() -> void:
-	_legend = PanelContainer.new()
-	_legend.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	_legend.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_legend.offset_left = 16
-	_legend.mouse_filter = Control.MOUSE_FILTER_IGNORE
+func _build_log() -> void:
+	_log_panel = PanelContainer.new()
+	_log_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_log_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_log_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_log_panel.offset_right = -16
+	_log_panel.offset_bottom = -16
+	_log_panel.custom_minimum_size = Vector2(360, 200)
+	_log_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_log = RichTextLabel.new()
+	_log.bbcode_enabled = true
+	_log.scroll_following = true
+	_log.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_log.add_theme_font_size_override("normal_font_size", 13)
+	_log_panel.add_child(_log)
+	_log_panel.visible = false
+	root.add_child(_log_panel)
+
+
+## Rules page: Five Phases wheel, crack & break, chains, intents, statuses and controls.
+func _build_rules() -> void:
+	_rules = PanelContainer.new()
+	_rules.set_anchors_preset(Control.PRESET_CENTER)
+	_rules.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_rules.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_rules.add_theme_stylebox_override("panel", _sb(Color(0.03, 0.03, 0.09, 0.96), BRASS, 2, 14, 18))
 	var t := RichTextLabel.new()
 	t.bbcode_enabled = true
 	t.fit_content = true
-	t.custom_minimum_size = Vector2(330, 0)
+	t.custom_minimum_size = Vector2(940, 0)
 	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	t.add_theme_font_size_override("normal_font_size", 14)
-	var c := func(e: int) -> String:
-		return "[color=#%s]%s[/color]" % [Data.ELEMENT_COLORS[e].to_html(false), Data.ELEMENT_NAMES[e]]
-	var txt := "[color=#e6b35f][b]元素裂变 Element Fission[/b][/color]\n"
-	txt += "伤害技能会给目标留下施法者的[b]元素印记[/b]；用[b]不同元素[/b]命中带印记的目标，会消耗印记触发裂变：\n"
-	var rows := [
-		[[0, 2], "wildfire"], [[0, 1], "steam"], [[1, 2], "frost"],
-		[[3, 4], "annihilate"], [[3, -1], "radiance"], [[4, -1], "corrode"],
-	]
-	for r in rows:
-		var info: Dictionary = Data.REACTIONS[r[1]]
-		var pair: String = c.call(r[0][0]) + "+" + (c.call(r[0][1]) if r[0][1] >= 0 else "火/水/风")
-		txt += "• %s → [b]%s[/b] %s\n" % [pair, info.name, info.desc]
-	txt += "\n克制：%s→%s→%s→%s，%s⇄%s" % [c.call(0), c.call(2), c.call(1), c.call(0), c.call(3), c.call(4)]
-	t.text = txt
-	_legend.add_child(t)
-	_legend.visible = false
-	root.add_child(_legend)
+	t.add_theme_font_size_override("bold_font_size", 14)
+	_rules_text(t)
+	_rules.add_child(t)
+	_rules.visible = false
+	root.add_child(_rules)
 
 
-func _build_result() -> void:
-	_result = PanelContainer.new()
-	_result.set_anchors_preset(Control.PRESET_CENTER)
-	_result.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_result.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_result.custom_minimum_size = Vector2(560, 0)
-	_result.add_theme_stylebox_override("panel", _sb(Color(0.04, 0.04, 0.1, 0.94), BRASS, 3, 14, 22))
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 12)
-	_result_title = _label("胜利", 52, BRASS)
-	_result_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_result_title.add_theme_constant_override("outline_size", 10)
-	v.add_child(_result_title)
-	_result_body = RichTextLabel.new()
-	_result_body.bbcode_enabled = true
-	_result_body.fit_content = true
-	_result_body.add_theme_font_size_override("normal_font_size", 16)
-	v.add_child(_result_body)
-	var h := HBoxContainer.new()
-	h.alignment = BoxContainer.ALIGNMENT_CENTER
-	h.add_theme_constant_override("separation", 12)
-	var next := Button.new()
-	next.text = "下一层 ▶"
-	next.pressed.connect(func(): next_pressed.emit())
-	var retry := Button.new()
-	retry.text = "重新挑战"
-	retry.pressed.connect(func(): retry_pressed.emit())
-	var runes := Button.new()
-	runes.text = "符文盘"
-	runes.pressed.connect(func(): runes_pressed.emit())
-	for b in [next, retry, runes]:
-		b.custom_minimum_size = Vector2(140, 48)
-		h.add_child(b)
-	v.add_child(h)
-	_result.add_child(v)
-	_result.visible = false
-	root.add_child(_result)
+static func element_bb(e: int) -> String:
+	return "[color=#%s]%s[/color]" % [Data.ELEMENT_COLORS[e].to_html(false), I18n.element(e)]
 
 
-# --- Nameplates & portraits ------------------------------------------------------------
-func setup_units(units: Array, wave: int, wins: int, losses: int) -> void:
+## "金克木 · 木克土 · ..." walking a five-phase cycle from `start`.
+static func _relation_line(rel: Dictionary, start: int, word: String) -> String:
+	var parts: Array = []
+	var e := start
+	for i in 5:
+		var nxt: int = rel[e]
+		parts.append(element_bb(e) + word + element_bb(nxt))
+		e = nxt
+	return " · ".join(parts)
+
+
+## Shared by the battle rules page and the title-screen guide.
+static func _rules_text(t: RichTextLabel) -> void:
+	var E := Data.Element
+	t.append_text("[color=#e6b35f][b]%s[/b][/color]\n" % I18n.s("rules_wuxing_title"))
+	for e in 5:
+		t.add_image(Icons.element(e, 40), 20, 20)
+		t.append_text(" %s %s   " % [element_bb(e), Data.ELEMENT_CRAFT[e].en if I18n.en() else Data.ELEMENT_CRAFT[e].zh])
+		if e == 2:
+			t.append_text("\n")
+	t.append_text("\n" + I18n.s("rules_ke", [_relation_line(Data.KE, E.METAL, I18n.s("ke_word"))]))
+	t.append_text("\n" + I18n.s("rules_sheng", [_relation_line(Data.SHENG, E.WOOD, I18n.s("sheng_word"))]))
+	t.append_text("\n\n[color=#e6b35f][b]%s[/b][/color]\n%s\n" % [I18n.s("rules_crack_title"), I18n.s("rules_crack")])
+	for e in 5:
+		var be: Dictionary = Data.BREAK_EFFECTS[e]
+		t.append_text("  %s · [b]%s[/b]  %s\n" % [element_bb(e), I18n.f(be, "name"), I18n.f(be, "desc")])
+	t.append_text("\n[color=#e6b35f][b]%s[/b][/color]\n%s\n" % [I18n.s("rules_chain_title"), I18n.s("rules_chain")])
+	t.append_text("\n[color=#e6b35f][b]%s[/b][/color]\n%s\n" % [I18n.s("rules_intent_title"), I18n.s("rules_intent")])
+	t.append_text("\n[color=#e6b35f][b]%s[/b][/color]\n" % I18n.s("statuses"))
+	for id in Data.STATUS:
+		var info: Dictionary = Data.STATUS[id]
+		t.add_image(Icons.status(id, info.color, 44), 22, 22)
+		t.append_text(" [color=#%s]%s[/color]  " % [info.color.to_html(false), I18n.f(info, "name")])
+	t.append_text("\n\n[color=#e6b35f][b]%s[/b][/color]\n%s" % [I18n.s("controls"), I18n.s("battle_hint")])
+
+
+# --- Nameplates ------------------------------------------------------------------------------
+func setup_units(units: Array, relics: Array, floor_text: String = "", traits: Array = [{}, {}]) -> void:
 	clear_units()
-	_wave_label.text = "星轨第 %d 层   胜 %d · 负 %d" % [wave, wins, losses]
+	_floor_label.text = floor_text
+	for row in [_trait_row, _enemy_trait_row]:
+		for c in row.get_children():
+			c.queue_free()
+	for team in 2:
+		for tid in Data.TRAIT_ORDER:
+			if traits[team].has(tid):
+				var ic := trait_icon(tid, int(traits[team][tid]), 30, team == 1)
+				(_trait_row if team == 0 else _enemy_trait_row).add_child(ic)
+	for c in _relic_row.get_children():
+		c.queue_free()
+	for r in relics:
+		var info: Dictionary = Data.RELICS[r]
+		var ic := _icon(Icons.tex("shard", Data.RARITY_COLORS[int(info.rarity)].darkened(0.45), 40), 30)
+		ic.mouse_filter = Control.MOUSE_FILTER_STOP
+		_hover(ic, func(): return "[color=#%s][b]◆ %s[/b][/color]\n%s" % [Data.RARITY_COLORS[int(info.rarity)].to_html(false), I18n.f(info, "name"), I18n.f(info, "desc")])
+		_relic_row.add_child(ic)
 	for u in units:
 		_make_plate(u)
-		_make_portrait(u)
+
+
+## Trait badge: glyph on a disc, tier pips, tooltip with every tier.
+func trait_icon(tid: String, tier: int, size: float, enemy: bool = false) -> Control:
+	var col := Color(0.55, 0.2, 0.22) if enemy else Color(0.42, 0.3, 0.12)
+	var holder := Control.new()
+	holder.custom_minimum_size = Vector2(size, size)
+	holder.mouse_filter = Control.MOUSE_FILTER_STOP
+	holder.add_child(_icon(Icons.tex(Icons.TRAIT_ICON.get(tid, "ring"), col, 48), size))
+	var n := _label("%d" % (tier + 1), 11, Color(1.0, 0.85, 0.45))
+	n.position = Vector2(size - 9, size - 14)
+	n.add_theme_constant_override("outline_size", 4)
+	holder.add_child(n)
+	_hover(holder, func(): return trait_tip(tid, tier))
+	return holder
+
+
+static func trait_tip(tid: String, tier: int) -> String:
+	var info: Dictionary = Data.TRAITS[tid]
+	var t := "[color=#e6b35f][b]%s[/b][/color]" % I18n.f(info, "name")
+	var descs: Array = info.desc_en if I18n.en() else info.desc
+	for i in info.tiers.size():
+		var on: bool = i <= tier
+		t += "\n[color=#%s](%d) %s[/color]" % ["ffe6a0" if on else "777788", int(info.tiers[i]), descs[i]]
+	return t
 
 
 func clear_units() -> void:
 	for u in _plates:
 		_plates[u].root.queue_free()
-	for u in _portraits:
-		_portraits[u].button.queue_free()
 	_plates.clear()
-	_portraits.clear()
 
 
 func _make_plate(u: Node) -> void:
 	var box := VBoxContainer.new()
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.custom_minimum_size = Vector2(150, 0)
+	box.custom_minimum_size = Vector2(118, 0)
 	box.add_theme_constant_override("separation", 2)
-	var name_row := HBoxContainer.new()
-	name_row.add_theme_constant_override("separation", 4)
-	var el := _label(Data.ELEMENT_NAMES[u.element], 14, Data.ELEMENT_COLORS[u.element])
-	name_row.add_child(el)
-	var nm := _label("%s Lv%d%s" % [u.display_name, u.level, "  ★首领" if u.is_boss else ""], 13, IVORY)
-	name_row.add_child(nm)
-	box.add_child(name_row)
-	var hp := _bar(ALLY_COL.lerp(Color(0.3, 1.0, 0.5), 0.5) if u.team == 0 else ENEMY_COL, 9)
-	box.add_child(hp)
-	var atb := _bar(Color(0.55, 0.85, 1.0), 4)
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 3)
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_child(_icon(Icons.element(u.element, 40), 18))
+	if u.is_boss:
+		top.add_child(_icon(Icons.tex("crown", Color(0, 0, 0, 0), 40, "#ffc850"), 18))
+	for i in u.mends:
+		top.add_child(_icon(Icons.tex("seam", Color(0, 0, 0, 0), 32, "#ffc850"), 12))
+	var hp := _bar(Color(0.35, 0.95, 0.5) if u.team == 0 else ENEMY_COL, 9)
+	hp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# gold shield overlays the HP bar
+	var shield := _bar(Color(1.0, 0.8, 0.3, 0.85), 9, Color(0, 0, 0, 0))
+	shield.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hp.add_child(shield)
+	top.add_child(hp)
+	box.add_child(top)
+	# crack gauge (裂纹): fills toward toughness; flashes when broken
+	var crack := _bar(Color(0.95, 0.93, 0.85), 4, Color(0.12, 0.1, 0.16, 0.9))
+	box.add_child(crack)
+	var atb := _bar(Color(0.55, 0.85, 1.0), 3)
 	box.add_child(atb)
-	var en := _bar(Color(1.0, 0.75, 0.3), 4)
+	var en := _bar(Color(1.0, 0.75, 0.3), 3)
 	box.add_child(en)
-	var st := RichTextLabel.new()
-	st.bbcode_enabled = true
-	st.fit_content = true
-	st.scroll_active = false
-	st.autowrap_mode = TextServer.AUTOWRAP_OFF
-	st.custom_minimum_size = Vector2(150, 0)
-	st.add_theme_font_size_override("normal_font_size", 12)
-	st.add_theme_constant_override("outline_size", 4)
-	st.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	box.add_child(st)
-	_ignore_all(box)
+	var status := HBoxContainer.new()
+	status.add_theme_constant_override("separation", 1)
+	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	status.custom_minimum_size = Vector2(0, 20)
+	box.add_child(status)
+	# enemy intent: what it will do next, and to whom
+	var intent := HBoxContainer.new()
+	intent.add_theme_constant_override("separation", 2)
+	intent.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(intent)
+	box.move_child(intent, 0)
 	root.add_child(box)
 	root.move_child(box, 0)
-	_plates[u] = {"root": box, "hp": hp, "atb": atb, "en": en, "status": st, "last_status": ""}
-
-
-func _make_portrait(u: Node) -> void:
-	var b := Button.new()
-	b.custom_minimum_size = Vector2(158, 62)
-	var v := VBoxContainer.new()
-	v.set_anchors_preset(Control.PRESET_FULL_RECT)
-	v.offset_left = 8
-	v.offset_right = -8
-	v.offset_top = 6
-	v.offset_bottom = -6
-	v.add_theme_constant_override("separation", 3)
-	var h := HBoxContainer.new()
-	h.add_child(_label(Data.ELEMENT_NAMES[u.element], 15, Data.ELEMENT_COLORS[u.element]))
-	h.add_child(_label(u.display_name, 14))
-	v.add_child(h)
-	var hp := _bar(Color(0.35, 0.95, 0.5) if u.team == 0 else ENEMY_COL, 8)
-	v.add_child(hp)
-	var en := _bar(Color(1.0, 0.75, 0.3), 5)
-	v.add_child(en)
-	b.add_child(v)
-	_ignore_all(b)
-	b.pressed.connect(func(): portrait_pressed.emit(u))
-	var border := ALLY_COL if u.team == 0 else ENEMY_COL
-	b.add_theme_stylebox_override("normal", _sb(Color(0.05, 0.05, 0.12, 0.9), border.darkened(0.3), 2, 8, 4))
-	b.add_theme_stylebox_override("hover", _sb(Color(0.12, 0.1, 0.25, 0.95), border, 2, 8, 4))
-	(_ally_row if u.team == 0 else _enemy_row).add_child(b)
-	_portraits[u] = {"button": b, "hp": hp, "en": en}
+	_plates[u] = {"root": box, "hp": hp, "shield": shield, "crack": crack, "atb": atb, "en": en, "status": status, "intent": intent, "key": "", "ikey": ""}
 
 
 func update_units(cam: Camera3D) -> void:
@@ -470,122 +478,195 @@ func update_units(cam: Camera3D) -> void:
 		var world: Vector3 = u.head_position()
 		if not u.alive or cam.is_position_behind(world):
 			box.visible = false
-		else:
-			box.visible = true
-			var sp := cam.unproject_position(world)
-			box.position = sp - Vector2(75, box.size.y)
-		p.hp.value = u.hp_ratio() * 100.0
-		p.atb.value = minf(u.atb, 100.0)
-		p.en.value = u.energy
-		var s := _status_bbcode(u)
-		if s != p.last_status:
-			p.status.text = s
-			p.last_status = s
-	for u in _portraits:
-		if not is_instance_valid(u):
 			continue
-		var q: Dictionary = _portraits[u]
-		q.hp.value = u.hp_ratio() * 100.0
-		q.en.value = u.energy
-		q.button.modulate = Color(1, 1, 1, 1) if u.alive else Color(0.45, 0.45, 0.5, 0.7)
+		box.visible = true
+		box.position = cam.unproject_position(world) - Vector2(59, box.size.y)
+		p.hp.value = u.hp_ratio() * 100.0
+		p.shield.value = u.shield / u.max_hp * 100.0
+		p.crack.value = u.crack_ratio() * 100.0
+		var crack_fill: StyleBoxFlat = p.crack.get_theme_stylebox("fill")
+		if u.broken:
+			crack_fill.bg_color = Color(1.0, 0.35, 0.3).lerp(Color(1, 0.85, 0.4), 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.012))
+		else:
+			crack_fill.bg_color = Color(0.95, 0.93, 0.85).lerp(Color(1.0, 0.55, 0.3), u.crack_ratio())
+		p.atb.value = minf(u.atb, 100.0)
+		p.en.value = u.energy / u.ult_cost * 100.0
+		var key := "%s|%s|%s|%d" % [u.broken, str(u.statuses), u.ultimate_ready(), u.element]
+		if key != p.key:
+			p.key = key
+			_fill_status(p.status, u)
+		var it: Dictionary = u.intent
+		var ikey := "" if it.is_empty() else "%d|%s" % [int(it.skill), str(it.target.get_instance_id()) if is_instance_valid(it.target) else ""]
+		if ikey != p.ikey:
+			p.ikey = ikey
+			_fill_intent(p.intent, u)
 
 
-func _status_bbcode(u: Node) -> String:
-	var parts: Array = []
-	if u.mark >= 0:
-		parts.append("[bgcolor=#%s][color=#000000] %s印 [/color][/bgcolor]" % [Data.ELEMENT_COLORS[u.mark].to_html(false), Data.ELEMENT_NAMES[u.mark]])
+## Intent row above an enemy plate: skill-kind icon (+ target portrait for single-target moves).
+func _fill_intent(row: HBoxContainer, u: Node) -> void:
+	for c in row.get_children():
+		c.queue_free()
+	var it: Dictionary = u.intent
+	if it.is_empty():
+		return
+	var i := int(it.skill)
+	var sk: Dictionary = u.skills[i]
+	var glyph := "intent_attack"
+	if i == 2:
+		glyph = "ult"
+	elif sk.target == "all_enemies":
+		glyph = "intent_aoe"
+	elif sk.target == "all_allies":
+		glyph = "intent_buff"
+	var col := Color(0.7, 0.15, 0.15) if i > 0 else Color(0.3, 0.12, 0.14)
+	row.add_child(_icon(Icons.tex(glyph, col, 48, "#ffe6c0"), 26 if i > 0 else 20))
+	if sk.target == "enemy" and is_instance_valid(it.target):
+		row.add_child(_icon(Icons.tex("speed", Color(0, 0, 0, 0), 32, "#ffb0a0"), 12))
+		row.add_child(_icon(Icons.portrait(it.target.species_id, it.target.element, 48), 22))
+
+
+## Status row: broken / shield first, then one icon per status with its turns as a badge.
+func _fill_status(row: HBoxContainer, u: Node) -> void:
+	for c in row.get_children():
+		c.queue_free()
+	if u.passive_id == "seventeen":
+		# the Mother of Porcelain's current glaze
+		row.add_child(_icon(Icons.element(u.element, 40), 20))
+	if u.broken:
+		row.add_child(_icon(Icons.tex("broken", Color(0.7, 0.2, 0.15), 40), 20))
 	for s in u.statuses:
 		var info: Dictionary = Data.STATUS[s.id]
-		parts.append("[color=#%s]%s%d[/color]" % [info.color.to_html(false), info.label, s.turns])
+		var holder := Control.new()
+		holder.custom_minimum_size = Vector2(20, 20)
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(_icon(Icons.status(s.id, info.color, 40), 20))
+		var n := _label(str(s.turns), 11, IVORY)
+		n.position = Vector2(12, 6)
+		n.add_theme_constant_override("outline_size", 4)
+		holder.add_child(n)
+		row.add_child(holder)
 	if u.ultimate_ready():
-		parts.append("[color=#ffc850]★奥义[/color]")
-	return " ".join(parts)
+		row.add_child(_icon(Icons.tex("ult", Color(0, 0, 0, 0), 40, "#ffc850"), 18))
 
 
-# --- Turn order ----------------------------------------------------------------------
-func update_turn_order(order: Array) -> void:
+## One-line summary of a unit, shown when hovering it.
+func unit_tip(u: Node) -> String:
+	var t := "[color=#%s][b]%s[/b][/color]  Lv%d" % [Data.ELEMENT_COLORS[u.element].to_html(false), u.display_name, u.level]
+	t += "\n%d / %d" % [int(u.hp), int(u.max_hp)]
+	if u.shield > 0.0:
+		t += "  [color=#ffd060]+%d[/color]" % int(u.shield)
+	t += "\n" + (I18n.s("tip_broken") if u.broken else I18n.s("tip_crack", [int(u.crack), int(u.toughness)]))
+	if not u.intent.is_empty():
+		var sk: Dictionary = u.skills[int(u.intent.skill)]
+		var tgt: String = u.intent.target.display_name if (sk.target == "enemy" and is_instance_valid(u.intent.target)) else I18n.s("target_" + String(sk.target))
+		t += "\n" + I18n.s("tip_intent", [I18n.f(sk, "name"), tgt])
+	for s in u.statuses:
+		var info: Dictionary = Data.STATUS[s.id]
+		t += "\n[color=#%s]%s[/color] ×%d" % [info.color.to_html(false), I18n.f(info, "name"), s.turns]
+	for sc in u.scars:
+		t += "\n[color=#ffc860]◆ %s[/color] %s" % [I18n.f(Data.SCARS[sc], "name"), I18n.f(Data.SCARS[sc], "desc")]
+	t += "\n[color=#8fb8ff]%s[/color] %s" % [I18n.f(u.species.passive, "name"), I18n.f(u.species.passive, "desc")]
+	for uid in u.upgrades:
+		t += "\n[color=#ffc860]✦ %s[/color]" % I18n.f(Data.upgrade_info(u.species_id, uid), "name")
+	return t
+
+
+# --- Turn order ----------------------------------------------------------------------------
+## Forecast of the next actors; a gold link badge marks actions that will be 相生 chain links.
+func update_turn_order(order: Array, chains: Array = []) -> void:
 	for c in _order_row.get_children():
 		c.queue_free()
 	for i in order.size():
 		var u = order[i]
-		var chip := PanelContainer.new()
+		var size := 46.0 if i == 0 else 34.0
+		var holder := PanelContainer.new()
+		holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var border := ALLY_COL if u.team == 0 else ENEMY_COL
-		chip.add_theme_stylebox_override("panel", _sb(Data.ELEMENT_COLORS[u.element].darkened(0.55), border, 2 if i > 0 else 3, 6, 3))
-		var l := _label(u.display_name.substr(0, 2), 13 if i > 0 else 15)
-		chip.add_child(l)
-		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_order_row.add_child(chip)
+		var link: int = int(chains[i]) if i < chains.size() else 0
+		if link > 0:
+			border = Color(1.0, 0.82, 0.35)
+		holder.add_theme_stylebox_override("panel", _sb(Color(0, 0, 0, 0), border, 3 if (i == 0 or link > 0) else 2, int(size / 2.0) + 3, 1))
+		var inner := Control.new()
+		inner.custom_minimum_size = Vector2(size, size)
+		inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.add_child(_icon(Icons.portrait(u.species_id, u.element, 64), size))
+		if link > 0:
+			var badge := _icon(Icons.tex("chain", Color(0.45, 0.3, 0.05), 32), 16)
+			badge.position = Vector2(size - 14, -4)
+			inner.add_child(badge)
+			var n := _label(str(link), 11, Color(1.0, 0.9, 0.5))
+			n.position = Vector2(size - 10, size - 14)
+			n.add_theme_constant_override("outline_size", 4)
+			inner.add_child(n)
+		holder.add_child(inner)
+		_order_row.add_child(holder)
 
 
-# --- Skills ---------------------------------------------------------------------------
+# --- Skills -----------------------------------------------------------------------------------
 func show_skills(u: Node, selected: int, cd_free: bool) -> void:
-	_skill_row.visible = true
-	_desc_panel.visible = true
+	_current = u
+	_skill_bar.visible = true
 	for i in 3:
 		var sk: Dictionary = u.skills[i]
 		var b: Button = _skill_buttons[i]
-		var sub := ""
-		var ok := true
-		if i == 2:
-			sub = "奥义 · 灵力 %d/100" % int(u.energy)
-			ok = u.ultimate_ready() or cd_free
-		elif int(u.cooldowns[i]) > 0 and not cd_free:
-			sub = "冷却 %d 回合" % int(u.cooldowns[i])
-			ok = false
-		else:
-			sub = "普攻" if i == 0 else "就绪 · 冷却%d" % int(sk.cd)
-		b.text = "%d  %s\n%s" % [i + 1, sk.name, sub]
-		b.disabled = not ok
 		var col: Color = Data.ELEMENT_COLORS[u.element]
-		if i == selected:
-			b.add_theme_stylebox_override("normal", _sb(Color(0.25, 0.18, 0.08, 0.98), Color(1, 0.85, 0.45), 3, 8, 8))
-		elif i == 2 and ok:
-			b.add_theme_stylebox_override("normal", _sb(col.darkened(0.6), col, 3, 8, 8))
-		else:
-			b.remove_theme_stylebox_override("normal")
-	_set_desc(u, selected)
+		b.icon = Icons.tex(Icons.skill_kind(sk, i), col.darkened(0.45) if i != 2 else col.darkened(0.25), 96)
+		var ok := true
+		var cd_text := ""
+		if i == 2:
+			ok = u.ultimate_ready() or cd_free
+			_skill_ring[i].value = minf(u.energy / u.ult_cost, 1.0) * 100.0
+		elif int(u.cooldowns[i]) > 0 and not cd_free:
+			ok = false
+			cd_text = str(int(u.cooldowns[i]))
+		b.disabled = not ok
+		b.modulate = Color(1, 1, 1) if ok else Color(0.55, 0.55, 0.6)
+		_skill_cd[i].text = cd_text
+		var r := 48 if i == 2 else 42
+		var border := Color(1, 0.88, 0.5) if i == selected else (col if i == 2 and ok else BRASS.darkened(0.35))
+		var bw := 4 if i == selected else 2
+		for st in ["normal", "hover", "disabled"]:
+			b.add_theme_stylebox_override(st, _sb(Color(0.05, 0.05, 0.12, 0.92), border, bw, r, 4))
+	# keep an open skill tip in sync with the newly selected skill
+	for i in 3:
+		if _tip.owned_by(_skill_buttons[i]):
+			show_tip(_skill_tip(i), _skill_buttons[i])
 
 
-func _on_skill_hover(i: int) -> void:
-	if battle and battle.has_method("hud_current_unit"):
-		var u = battle.hud_current_unit()
-		if u:
-			_set_desc(u, i)
-
-
-func _set_desc(u: Node, i: int) -> void:
+func _skill_tip(i: int) -> String:
+	var u := _current
+	if u == null or not is_instance_valid(u):
+		return ""
 	var sk: Dictionary = u.skills[i]
-	var tgt: String = {"enemy": "单体敌人", "all_enemies": "全体敌人", "all_allies": "全体队友"}[sk.target]
-	_desc.text = "[color=#e6b35f][b]%s[/b][/color]  [color=#9aa]%s[/color]\n%s\n[color=#8fb8ff]被动·%s：[/color]%s" % [
-		sk.name, tgt, sk.desc, u.species.passive.name, u.species.passive.desc]
-
-
-func set_preview(text: String) -> void:
-	if text == "":
-		return
-	_desc.text = text
+	var tgt := I18n.s("target_" + String(sk.target))
+	var cost := ""
+	if i == 2:
+		cost = I18n.s("ult_energy", [int(u.energy), int(u.ult_cost)])
+	elif int(sk.cd) > 0:
+		cost = I18n.s("cd_turns", [int(sk.cd)])
+	return "[color=#e6b35f][b]%s[/b][/color]  [color=#9aa]%s · %s[/color]\n%s" % [I18n.f(sk, "name"), tgt, cost, I18n.f(sk, "desc")]
 
 
 func hide_skills() -> void:
-	_skill_row.visible = false
-	_desc_panel.visible = false
-	_hint.text = ""
+	_skill_bar.visible = false
+	for b in _skill_buttons:
+		hide_tip(b)
 
 
-func set_hint(text: String) -> void:
-	_hint.text = text
+func set_hint(_text: String) -> void:
+	pass
 
 
 func set_auto(on: bool) -> void:
 	_auto_btn.button_pressed = on
-	_auto_btn.text = "自动 ON" if on else "自动 AUTO"
+	_auto_btn.modulate = Color(1.0, 0.85, 0.45) if on else Color.WHITE
 
 
 func set_speed(mult: int) -> void:
-	_speed_btn.text = "速度 x%d" % mult
+	_speed_btn.modulate = [Color.WHITE, Color(0.7, 0.95, 1.0), Color(1.0, 0.8, 0.45)][clampi(mult, 1, 3) - 1]
 
 
-# --- Banners & log -------------------------------------------------------------------
+# --- Banners & log -------------------------------------------------------------------------
 func banner(text: String, color: Color = BRASS, sub: String = "") -> void:
 	_banner.text = text
 	_banner.add_theme_color_override("font_color", color)
@@ -609,195 +690,3 @@ func log_line(text: String) -> void:
 
 func clear_log() -> void:
 	_log.clear()
-
-
-# --- Result ---------------------------------------------------------------------------
-func show_result(victory: bool, body: String) -> void:
-	_result_title.text = "胜 利  VICTORY" if victory else "败 北  DEFEAT"
-	_result_title.add_theme_color_override("font_color", BRASS if victory else ENEMY_COL)
-	_result_body.text = body
-	_result.visible = true
-	_result.modulate.a = 0.0
-	_result.scale = Vector2.ONE * 0.9
-	var t := create_tween()
-	t.tween_property(_result, "modulate:a", 1.0, 0.3)
-
-
-func hide_result() -> void:
-	_result.visible = false
-
-
-func is_modal_open() -> bool:
-	return _board.visible
-
-
-# --- Rune Board ----------------------------------------------------------------------
-func _build_board() -> void:
-	_board = PanelContainer.new()
-	_board.set_anchors_preset(Control.PRESET_CENTER)
-	_board.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_board.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_board.custom_minimum_size = Vector2(1180, 640)
-	_board.add_theme_stylebox_override("panel", _sb(Color(0.03, 0.03, 0.09, 0.97), BRASS, 3, 14, 16))
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	var head := HBoxContainer.new()
-	head.add_child(_label("符文盘 · 星图编组", 26, BRASS))
-	var note := _label("   （改动在下一场战斗生效）", 14, Color(0.7, 0.7, 0.8))
-	note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(note)
-	var close := Button.new()
-	close.text = "关闭 ✕"
-	close.pressed.connect(close_board)
-	head.add_child(close)
-	v.add_child(head)
-	var body := HBoxContainer.new()
-	body.add_theme_constant_override("separation", 14)
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-
-	var left := VBoxContainer.new()
-	left.custom_minimum_size = Vector2(290, 0)
-	left.add_child(_label("图鉴 / 队伍（★ = 出战）", 16, BRASS))
-	_roster_list = ItemList.new()
-	_roster_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_roster_list.item_selected.connect(func(i): _board_mon = int(_roster_list.get_item_metadata(i)); _board_slot = -1; _refresh_board())
-	left.add_child(_roster_list)
-	var team_row := HBoxContainer.new()
-	team_row.add_child(_label("设为队伍位：", 14))
-	for i in 4:
-		var b := Button.new()
-		b.text = "%d" % (i + 1) + ("(队长)" if i == 0 else "")
-		b.pressed.connect(func():
-			if _board_mon >= 0:
-				_profile.set_team_slot(i, _board_mon)
-				_refresh_board())
-		team_row.add_child(b)
-	left.add_child(team_row)
-	_summon_btn = Button.new()
-	_summon_btn.pressed.connect(func():
-		var m: Dictionary = _profile.summon()
-		if not m.is_empty():
-			_board_mon = int(m.uid)
-			banner("召唤成功！", BRASS, Data.full_name(m.species))
-		_refresh_board())
-	left.add_child(_summon_btn)
-	body.add_child(left)
-
-	var mid := VBoxContainer.new()
-	mid.custom_minimum_size = Vector2(430, 0)
-	_mon_info = RichTextLabel.new()
-	_mon_info.bbcode_enabled = true
-	_mon_info.fit_content = true
-	_mon_info.add_theme_font_size_override("normal_font_size", 14)
-	mid.add_child(_mon_info)
-	var dial := Control.new()
-	dial.custom_minimum_size = Vector2(430, 300)
-	for i in 6:
-		var a := -PI / 2.0 + TAU * i / 6.0
-		var b := Button.new()
-		b.custom_minimum_size = Vector2(150, 64)
-		b.size = Vector2(150, 64)
-		b.position = Vector2(215, 150) + Vector2(cos(a), sin(a)) * Vector2(145, 112) - Vector2(75, 32)
-		b.add_theme_font_size_override("font_size", 12)
-		b.pressed.connect(func(): _board_slot = i; _refresh_board())
-		dial.add_child(b)
-		_slot_buttons.append(b)
-	mid.add_child(dial)
-	body.add_child(mid)
-
-	var right := VBoxContainer.new()
-	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right.add_child(_label("符文仓库（选中槽位后筛选）", 16, BRASS))
-	_inv_list = ItemList.new()
-	_inv_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right.add_child(_inv_list)
-	var rb := HBoxContainer.new()
-	var equip := Button.new()
-	equip.text = "装备所选符文"
-	equip.pressed.connect(func():
-		var sel := _inv_list.get_selected_items()
-		if _board_mon >= 0 and sel.size() > 0:
-			_profile.equip(_board_mon, int(_inv_uids[sel[0]]))
-			_refresh_board())
-	var unequip := Button.new()
-	unequip.text = "卸下当前槽位"
-	unequip.pressed.connect(func():
-		if _board_mon >= 0 and _board_slot >= 0:
-			_profile.unequip(_board_mon, _board_slot)
-			_refresh_board())
-	var all := Button.new()
-	all.text = "显示全部"
-	all.pressed.connect(func(): _board_slot = -1; _refresh_board())
-	rb.add_child(equip)
-	rb.add_child(unequip)
-	rb.add_child(all)
-	right.add_child(rb)
-	body.add_child(right)
-	v.add_child(body)
-	_board.add_child(v)
-	_board.visible = false
-	root.add_child(_board)
-
-
-func open_board(profile) -> void:
-	_profile = profile
-	if _board_mon < 0 or _profile.get_monster(_board_mon).is_empty():
-		_board_mon = int(_profile.data.team[0])
-	_board_slot = -1
-	_board.visible = true
-	_refresh_board()
-
-
-func close_board() -> void:
-	_board.visible = false
-	rune_board_closed.emit()
-
-
-func _refresh_board() -> void:
-	var data: Dictionary = _profile.data
-	_summon_btn.text = "使用召唤卷轴（剩余 %d）" % int(data.scrolls)
-	_summon_btn.disabled = int(data.scrolls) <= 0
-	_roster_list.clear()
-	var team: Array = data.team.map(func(x): return int(x))
-	for m in data.roster:
-		var idx := team.find(int(m.uid))
-		var prefix := "★%d " % (idx + 1) if idx >= 0 else "    "
-		var i := _roster_list.add_item("%s%s  Lv%d" % [prefix, Data.full_name(m.species), int(m.level)])
-		_roster_list.set_item_metadata(i, int(m.uid))
-		_roster_list.set_item_custom_fg_color(i, Data.ELEMENT_COLORS[Data.SPECIES[m.species].element].lerp(IVORY, 0.4))
-		if int(m.uid) == _board_mon:
-			_roster_list.select(i)
-	var mon: Dictionary = _profile.get_monster(_board_mon)
-	if mon.is_empty():
-		return
-	var sp: Dictionary = Data.SPECIES[mon.species]
-	var st: Dictionary = _profile.stats_of(mon)
-	var sets := ", ".join(st.sets.map(func(sid): return "%s(%s)" % [Data.RUNE_SETS[sid].name, Data.stat_text(Data.RUNE_SETS[sid].stat, Data.RUNE_SETS[sid].value)]))
-	_mon_info.text = "[b][color=#%s]%s[/color][/b]  %s · %s  Lv%d  (EXP %d/%d)\n生命 %d  攻击 %d  防御 %d  速度 %d\n暴击 %d%%  暴伤 %d%%  命中 %d%%  抵抗 %d%%\n套装：%s\n[color=#8fb8ff]队长技：[/color]%s" % [
-		Data.ELEMENT_COLORS[sp.element].to_html(false), Data.full_name(mon.species), sp.en, sp.role, int(mon.level),
-		int(mon.exp), Data.exp_to_next(int(mon.level)), st.hp, st.atk, st.def, st.spd, st.crit_rate, st.crit_dmg, st.acc, st.res,
-		sets if sets != "" else "无", Data.stat_text(sp.leader.stat, sp.leader.value)]
-	var runes: Array = _profile.runes_of(mon)
-	for i in 6:
-		var b: Button = _slot_buttons[i]
-		var r = runes[i]
-		if r == null or r.is_empty():
-			b.text = "%d号位\n（空）" % (i + 1)
-			b.remove_theme_stylebox_override("normal")
-		else:
-			b.text = "%d号位 %s\n%s" % [i + 1, Data.RUNE_SETS[r.set].name, Data.stat_text(r.stat, r.value)]
-			b.add_theme_stylebox_override("normal", _sb(Color(0.06, 0.05, 0.14, 0.95), Data.GRADE_COLORS[int(r.grade)], 2, 30, 6))
-		if i == _board_slot:
-			b.add_theme_stylebox_override("normal", _sb(Color(0.3, 0.22, 0.08, 0.98), Color(1, 0.9, 0.5), 3, 30, 6))
-	_inv_list.clear()
-	_inv_uids.clear()
-	var sorted: Array = data.runes.duplicate()
-	sorted.sort_custom(func(a, b): return int(a.slot) * 10 - int(a.grade) < int(b.slot) * 10 - int(b.grade))
-	for r in sorted:
-		if _board_slot >= 0 and int(r.slot) != _board_slot:
-			continue
-		var owner: Dictionary = _profile.owner_of(int(r.uid))
-		var suffix := "" if owner.is_empty() else "  ← %s" % Data.SPECIES[owner.species].name
-		var i := _inv_list.add_item(Data.rune_text(r) + suffix)
-		_inv_list.set_item_custom_fg_color(i, Data.GRADE_COLORS[int(r.grade)].lerp(IVORY, 0.3))
-		_inv_uids.append(int(r.uid))

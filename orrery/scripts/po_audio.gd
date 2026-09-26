@@ -31,7 +31,8 @@ func play(sfx: String, volume_db: float = 0.0, pitch: float = 1.0) -> void:
 
 
 func element_sfx(element: int) -> String:
-	return ["fire", "water", "wind", "light", "dark"][element]
+	# 金 chime, 木 rustle, 水 splash, 火 roar, 土 low rumble
+	return ["light", "wind", "water", "fire", "dark"][element]
 
 
 # --- Synthesis ---------------------------------------------------------------------
@@ -183,6 +184,63 @@ func _build_all() -> void:
 	s = _buf(0.35)
 	_noise(s, 0, 0.35, 2500, 5000, 0.35, 10, 0.03)
 	_streams["miss"] = _to_stream(s)
+
+	# --- signature-move sounds ---
+	s = _buf(0.08)
+	_tone(s, 0, 0.08, 2600, 1800, 0.35, 50)
+	_noise(s, 0, 0.04, 8000, 3000, 0.3, 80)
+	_streams["peck"] = _to_stream(s)
+
+	s = _buf(0.6)
+	_noise(s, 0, 0.6, 1800, 600, 0.6, 5, 0.03)
+	for k in 6:
+		_tone(s, 0.05 + k * 0.06, 0.12, 500 + randf() * 600, 900 + randf() * 900, 0.18, 22)
+	_streams["splash"] = _to_stream(s)
+
+	s = _buf(0.45)
+	_tone(s, 0, 0.45, 110, 38, 1.0, 7)
+	_noise(s, 0, 0.2, 900, 150, 0.6, 14)
+	_streams["stomp"] = _to_stream(s)
+
+	s = _buf(0.4)
+	_noise(s, 0, 0.4, 600, 4000, 0.55, 6, 0.12)
+	_streams["whoosh"] = _to_stream(s)
+
+	s = _buf(0.8)
+	_tone(s, 0, 0.8, 140, 70, 0.6, 3.5, "saw", 0.05)
+	_tone(s, 0, 0.8, 147, 72, 0.5, 3.5, "saw", 0.05)
+	_noise(s, 0, 0.7, 1200, 300, 0.55, 3.5, 0.06)
+	_streams["roar"] = _to_stream(s)
+
+	# ceramic lid clank: inharmonic partials of a thick porcelain body
+	s = _buf(0.7)
+	for f in [620.0, 1045.0, 1690.0, 2480.0]:
+		_tone(s, 0, 0.7, f, f * 0.998, 0.22, 6.5)
+	_tone(s, 0, 0.3, 90, 50, 0.7, 12)
+	_noise(s, 0, 0.08, 7000, 2000, 0.5, 40)
+	_streams["clang"] = _to_stream(s)
+
+	s = _buf(0.35)
+	_tone(s, 0, 0.35, 2800, 1500, 0.3, 7, "square")
+	_tone(s, 0.02, 0.3, 3400, 2100, 0.15, 8)
+	_streams["screech"] = _to_stream(s)
+
+	s = _buf(0.9)
+	for i in 10:
+		var f := randf_range(1800.0, 4200.0)
+		_tone(s, i * 0.06, 0.4, f, f, 0.12, 9)
+	_streams["twinkle"] = _to_stream(s)
+
+	s = _buf(0.9)
+	_tone(s, 0, 0.18, 700, 1300, 0.35, 1.5, "saw")
+	_tone(s, 0.16, 0.6, 1300, 900, 0.35, 3.0, "saw")
+	_tone(s, 0.16, 0.6, 1950, 1350, 0.12, 3.0)
+	_streams["crow"] = _to_stream(s)
+
+	s = _buf(0.3)
+	_tone(s, 0, 0.3, 1100, 1100, 0.18, 12)
+	_tone(s, 0, 0.3, 1650, 1650, 0.12, 12)
+	_streams["pop"] = _to_stream(s)
 
 	# porcelain shattering: a cascade of tiny ceramic clinks
 	s = _buf(1.1)

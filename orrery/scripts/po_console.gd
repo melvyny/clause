@@ -1,9 +1,10 @@
 extends CanvasLayer
-## Porcelain Orrery :: developer cheat console (toggle with F1 or ` / ~).
+## Goldmend :: developer cheat console (toggle with F1 or ` / ~).
 
 const M = preload("po_mat.gd")
+const I18n = preload("po_i18n.gd")
 
-var battle: Node
+var game: Node
 var _panel: PanelContainer
 var _checks := {}
 var _status: Label
@@ -11,9 +12,16 @@ var _status: Label
 
 func _ready() -> void:
 	layer = 20
+	_build()
+
+
+func _build() -> void:
+	if _panel:
+		_panel.queue_free()
+	_checks.clear()
 	_panel = PanelContainer.new()
-	_panel.position = Vector2(16, 90)
-	_panel.custom_minimum_size = Vector2(300, 0)
+	_panel.position = Vector2(16, 120)
+	_panel.custom_minimum_size = Vector2(320, 0)
 	var theme := Theme.new()
 	theme.default_font = M.ui_font()
 	theme.default_font_size = 15
@@ -28,26 +36,27 @@ func _ready() -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 6)
 	var title := Label.new()
-	title.text = "▣ DEV CONSOLE  (F1 / ~)"
+	title.text = I18n.s("c_title")
 	title.add_theme_color_override("font_color", Color(0.4, 1.0, 0.6))
 	v.add_child(title)
-
-	_button(v, "瞬间获胜 Win Battle Instantly", func(): battle.cheat_win())
-	_button(v, "击杀全部敌人 Kill All Enemies", func(): battle.cheat_kill_all())
-	_check(v, "no_cd", "无限冷却 + 满灵力 Infinite Cooldowns", func(on): battle.cheat_no_cd = on)
-	_check(v, "max_atb", "我方满攻击条 Max ATB Always", func(on): battle.cheat_max_atb = on)
-	_check(v, "auto", "自动战斗 AI Auto-Battle", func(on): battle.set_auto(on))
+	_button(v, I18n.s("c_win"), func(): game.cheat("win"))
+	_button(v, I18n.s("c_kill"), func(): game.cheat("kill"))
+	_check(v, "no_cd", I18n.s("c_nocd"), func(on): game.cheat_flag("no_cd", on))
+	_check(v, "max_atb", I18n.s("c_maxatb"), func(on): game.cheat_flag("max_atb", on))
+	_check(v, "auto", I18n.s("c_auto"), func(on): game.set_auto(on))
 	var speeds := HBoxContainer.new()
 	for m in [1, 2, 3]:
 		var b := Button.new()
-		b.text = "%dx 倍速" % m
-		b.pressed.connect(func(): battle.set_speed(m))
+		b.text = I18n.s("c_speed", [m])
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(func(): game.set_speed(m))
 		speeds.add_child(b)
 	v.add_child(speeds)
-	_button(v, "我方全体回满 Heal Team", func(): battle.cheat_heal())
-	_button(v, "获得5个传说符文 +5 Legend Runes", func(): battle.cheat_runes())
-	_button(v, "+3 召唤卷轴 Summoning Scrolls", func(): battle.cheat_scrolls())
-	_button(v, "重置存档 Reset Save", func(): battle.cheat_reset())
+	_button(v, I18n.s("c_heal"), func(): game.cheat("heal"))
+	_button(v, I18n.s("c_gold"), func(): game.cheat("gold"))
+	_button(v, I18n.s("c_relic"), func(): game.cheat("relic"))
+	_button(v, I18n.s("c_mend"), func(): game.cheat("mend"))
+	_button(v, I18n.s("c_lang"), func(): game.toggle_language())
 	_status = Label.new()
 	_status.add_theme_font_size_override("font_size", 12)
 	_status.add_theme_color_override("font_color", Color(0.6, 0.9, 0.7))
@@ -57,28 +66,43 @@ func _ready() -> void:
 	_panel.visible = false
 
 
+func rebuild() -> void:
+	var was: bool = _panel.visible
+	_build()
+	_panel.visible = was
+
+
 func _button(parent: Node, text: String, cb: Callable) -> void:
 	var b := Button.new()
 	b.text = text
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	b.pressed.connect(func():
-		cb.call()
-		note(text))
+	b.focus_mode = Control.FOCUS_NONE
+	b.pressed.connect(_on_button.bind(cb, text))
 	parent.add_child(b)
+
+
+func _on_button(cb: Callable, text: String) -> void:
+	cb.call()
+	note(text)
 
 
 func _check(parent: Node, key: String, text: String, cb: Callable) -> void:
 	var c := CheckButton.new()
 	c.text = text
-	c.toggled.connect(func(on):
-		cb.call(on)
-		note("%s: %s" % [text, "ON" if on else "OFF"]))
+	c.focus_mode = Control.FOCUS_NONE
+	c.toggled.connect(_on_check.bind(cb, text))
 	parent.add_child(c)
 	_checks[key] = c
 
 
+func _on_check(on: bool, cb: Callable, text: String) -> void:
+	cb.call(on)
+	note("%s: %s" % [text, "ON" if on else "OFF"])
+
+
 func sync(auto_on: bool) -> void:
-	_checks.auto.set_pressed_no_signal(auto_on)
+	if _checks.has("auto"):
+		_checks.auto.set_pressed_no_signal(auto_on)
 
 
 func toggle() -> void:
